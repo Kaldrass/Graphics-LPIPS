@@ -1,0 +1,8 @@
+out/
+*.png
+*.htm
+*.html
+*.json
+.vscode/
+.vs/
+__pycache__/
