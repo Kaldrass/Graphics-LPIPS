@@ -1,3 +1,4 @@
+
 import argparse
 import os
 import lpips
@@ -14,10 +15,10 @@ from decimal import Decimal
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-f','--csvfile', type=str, default='./dataset/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv')
-parser.add_argument('-m','--modelpath', type=str, default='./lpips/weights/v0.1/alex.pth', help='location of model')
+parser.add_argument('-m','--modelpath', type=str, default='./checkpoints/GraphicsLPIPS_FinalNetwork/latest_net_.pth', help='location of model')
 parser.add_argument('-o','--out', type=str, default='./GraphicsLPIPS_TestsetScores.csv')
 parser.add_argument('-v','--version', type=str, default='0.1')
-parser.add_argument('--use_gpu', action='store_true', help='turn on flag to use GPU')
+parser.add_argument('--use_gpu', action='store_true', help='turn on flag to use GPU', default=True)
 
 opt = parser.parse_args()
 
@@ -81,6 +82,7 @@ List_MOS = np.array(List_MOS)
 
 # Instantiate a binomial family model with the logit link function (the default link function).
 List_GraphicsLPIPS = sm.add_constant(List_GraphicsLPIPS)
+print('List_GraphicsLPIPS:', List_GraphicsLPIPS)
 glm_binom = sm.GLM(List_MOS, List_GraphicsLPIPS, family = sm.families.Binomial())#, link = sm.families.links.Logit()
 res_regModel = glm_binom.fit()
 

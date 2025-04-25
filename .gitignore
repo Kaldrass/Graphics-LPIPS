@@ -6,3 +6,4 @@ out/
 .vscode/
 .vs/
 __pycache__/
+dataset/

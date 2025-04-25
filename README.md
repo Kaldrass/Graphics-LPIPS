@@ -1,5 +1,4 @@
-﻿# Graphics-LPIPS
-
+﻿
 **The Graphics-LPIPS metric is an extension of the [LPIPS metric](https://github.com/richzhang/PerceptualSimilarity) 
 originally designed for images and perceptual similarity tasks, which we adapted for 3D graphics and quality assessment tasks.
 Graphics-LPIPS employs CNNs with learning linear weights on top, fed with reference and distorted patches of rendered images of 3D models. 
