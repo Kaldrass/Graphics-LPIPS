@@ -33,11 +33,9 @@ force_overwrite = False # If the file already exists, we will overwrite it. If F
 root_refPatches = 'D:/These/Projets/CompareMetrics/out/' + config.database + '/' + config.render_method + '/' + config.view_method + '/Source/' + str(config.testing_views) + 'VP/' 
 root_disPatches = 'D:/These/Projets/CompareMetrics/out/' + config.database + '/' + config.render_method + '/' + config.view_method + '/Distorted/' + str(config.testing_views) + 'VP/'
 ext = '.png'
-mos_csv_file = 'D:/These/BDD/TMQ/Collected_Data/MOS+CI_3000stimuli.csv'#r"D:\These\BDD\BASICS(PC)_DB\MOS_CI.csv" # Depends on the DATABASE used.
-# The 20% is the one that is used in the test_list_csv file.
-test_list_csv = r'D:\These\Graphics-LPIPS\dataset\TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv' # We need to take the 1st column of the CSV file as the list of files.
+# The 20% is the one that is used in the config.test_list_csv file.
 # ref_obj_list = find_dis_ref.find_ref_files(root_refPatches)
-ref_obj_list = correlation_VP.get_testset_ref_list(test_list_csv) # We will take the reference objects from the CSV file. The function 'get_ref_obj_list' will return a list of the reference objects.
+ref_obj_list = correlation_VP.get_testset_ref_list(config.test_list_csv) # We will take the reference objects from the CSV file. The function 'get_ref_obj_list' will return a list of the reference objects.
 
 # ------------------------------- YANA VALIDATION VARIABLES -------------------------------
 
@@ -98,14 +96,14 @@ for ref_obj in ref_obj_list:
         csv_patch_file = find_dis_ref.find_ref_csvfiles(root_refPatches + '/' + ref_obj)[0]
 
         ###--------------------DEBUG START--------------------###
-        # if(correlation_VP.get_MOS(mos_csv_file, distorted_obj, 2, 3) == -1): 
-        # # if(correlation_VP.get_test_MOS(test_list_csv, distorted_obj) == -1): # ONLY FOR TMQ 
+        # if(correlation_VP.get_MOS(config.mos_csv_file, distorted_obj, 2, 3) == -1): 
+        # # if(correlation_VP.get_test_MOS(config.test_list_csv, distorted_obj) == -1): # ONLY FOR TMQ 
         #     print('[DEBUG] The object %s is not in the MOS file. We will skip it.' % distorted_obj)
         #     continue
         ###---------------------DEBUG END---------------------###
         # Creating the output csv file for the distorted object
-        List_MOS.append([correlation_VP.get_MOS(mos_csv_file, distorted_obj, name_col = 0, mos_col = 1)]) # WARNING : MOS_COL and NAME_COL needs to be specified correctly
-        # List_MOS.append([correlation_VP.get_test_MOS(test_list_csv, distorted_obj)])
+        List_MOS.append([correlation_VP.get_MOS(config.mos_csv_file, distorted_obj, name_col = 0, mos_col = 1)]) # WARNING : MOS_COL and NAME_COL needs to be specified correctly
+        # List_MOS.append([correlation_VP.get_test_MOS(config.test_list_csv, distorted_obj)])
 
         with open(csv_patch_file) as csv_file:
             csv_reader = csv.reader(csv_file, delimiter=',')

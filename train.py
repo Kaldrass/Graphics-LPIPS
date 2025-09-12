@@ -60,9 +60,9 @@ class CUDAPrefetcher:
 
 os.environ['PYTHONWARNINGS'] = 'ignore'
 
-train_name = 'TSMD_Gautier_NR_1VPn_fib'
+train_name = 'TSMD_Gautier_NR_4VPn_fib'
 target = 'mos'  # 'mos' or 'judges', for TMQ put judges
-train_view_nbr = 1
+train_view_nbr = 4
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--datasets', type=str, nargs='+', default=['./dataset/TexturedDB_80%_TrainList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/TSMD_80%_TrainList_scaled.csv'], help='datasets to train on')
