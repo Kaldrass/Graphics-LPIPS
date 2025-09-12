@@ -111,7 +111,7 @@ def load_image(path):
     else:
         img = (255*plt.imread(path)[:,:,:3]).astype('uint8')
 
-    return img
+    return img  
 
 def rgb2lab(input):
     from skimage import color
@@ -127,7 +127,7 @@ def im2tensor(image, imtype=np.uint8, cent=1., factor=255./2.):
                         [:, :, :, np.newaxis].transpose((3, 2, 0, 1)))
 
 def tensor2vec(vector_tensor):
-    return vector_tensor.data.cpu().numpy()[:, :, 0, 0]
+    return vector_tensor.detach().cpu().numpy()[:, :, 0, 0]
 
 
 def tensor2im(image_tensor, imtype=np.uint8, cent=1., factor=255./2.):
@@ -140,8 +140,6 @@ def im2tensor(image, imtype=np.uint8, cent=1., factor=255./2.):
 # def im2tensor(image, imtype=np.uint8, cent=1., factor=1.):
     return torch.Tensor((image / factor - cent)
                         [:, :, :, np.newaxis].transpose((3, 2, 0, 1)))
-
-
 
 def voc_ap(rec, prec, use_07_metric=False):
     """ ap = voc_ap(rec, prec, [use_07_metric])

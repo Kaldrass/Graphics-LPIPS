@@ -84,7 +84,7 @@ class LPIPS(nn.Module):
 
         # v0.0 - original release had a bug, where input was not scaled
         in0_input, in1_input = (self.scaling_layer(in0), self.scaling_layer(in1)) if self.version=='0.1' else (in0, in1)
-        outs0, outs1 = self.net.forward(in0_input), self.net.forward(in1_input)
+        outs0, outs1 = self.net.forward(in0_input), self.net.forward(in1_input) #Putting in AlexNet or VGG16 or SqueezeNet
         feats0, feats1, diffs = {}, {}, {}
 
         for kk in range(self.L):
@@ -196,9 +196,9 @@ class L2(FakeNet):
             value = torch.mean(torch.mean(torch.mean((in0-in1)**2,dim=1).view(N,1,X,Y),dim=2).view(N,1,1,Y),dim=3).view(N)
             return value
         elif(self.colorspace=='Lab'):
-            value = lpips.l2(lpips.tensor2np(lpips.tensor2tensorlab(in0.data,to_norm=False)), 
-                lpips.tensor2np(lpips.tensor2tensorlab(in1.data,to_norm=False)), range=100.).astype('float')
-            ret_var = Variable( torch.Tensor((value,) ) )
+            value = lpips.l2(lpips.tensor2np(lpips.tensor2tensorlab(in0.detach(),to_norm=False)), 
+                lpips.tensor2np(lpips.tensor2tensorlab(in1.detach(),to_norm=False)), range=100.).astype('float')
+            ret_var = torch.tensor([value], dtype=torch.float32, device="cuda:0")
             if(self.use_gpu):
                 ret_var = ret_var.cuda()
             return ret_var
@@ -209,11 +209,12 @@ class DSSIM(FakeNet):
         assert(in0.size()[0]==1) # currently only supports batchSize 1
 
         if(self.colorspace=='RGB'):
-            value = lpips.dssim(1.*lpips.tensor2im(in0.data), 1.*lpips.tensor2im(in1.data), range=255.).astype('float')
+            value = lpips.dssim(1.*lpips.tensor2im(in0.detach()), 1.*lpips.tensor2im(in1.detach()), range=255.).astype('float')
         elif(self.colorspace=='Lab'):
-            value = lpips.dssim(lpips.tensor2np(lpips.tensor2tensorlab(in0.data,to_norm=False)), 
-                lpips.tensor2np(lpips.tensor2tensorlab(in1.data,to_norm=False)), range=100.).astype('float')
-        ret_var = Variable( torch.Tensor((value,) ) )
+            value = lpips.dssim(lpips.tensor2np(lpips.tensor2tensorlab(in0.detach(),to_norm=False)), 
+                lpips.tensor2np(lpips.tensor2tensorlab(in1.detach(),to_norm=False)), range=100.).astype('float')
+        ret_var = torch.tensor([value], dtype=torch.float32, device="cuda:0")
+
         if(self.use_gpu):
             ret_var = ret_var.cuda()
         return ret_var

@@ -92,4 +92,36 @@ corrSpear =  stats.spearmanr(fitted_GraphicsLpips, List_MOS)[0]
 print('pearson %.3f'%corrPears)
 print('spearman %.3f'%corrSpear)
 
+import matplotlib.pyplot as plt
+
+# Tri des points pour un tracé fluide de la courbe de régression
+sorted_indices = np.argsort(List_GraphicsLPIPS[:,1])
+x_sorted = List_GraphicsLPIPS[sorted_indices,1]
+y_sorted = fitted_GraphicsLpips[sorted_indices]
+
+# Affichage et sauvegarde du graphique de régression
+plt.figure(figsize=(8,6))
+plt.scatter(List_GraphicsLPIPS[:,1], List_MOS, label='Données', alpha=0.7, color='blue')
+plt.plot(x_sorted, y_sorted, label='Régression logistique', color='red', linewidth=2)
+plt.xlabel('Graphics LPIPS')
+plt.ylabel('MOS')
+plt.title(f'Régression logistique\nPearson={corrPears:.3f} | Spearman={corrSpear:.3f}')
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.savefig('regression_plot.png')
+plt.show()
+
+
+# Sauvegarde des résultats dans un fichier CSV
+with open('correlation_summary.csv', 'w', newline='') as summary_file:
+    writer = csv.writer(summary_file)
+    writer.writerow(['Pearson', 'Spearman', 'Slope', 'Intercept'])
+    writer.writerow([
+        round(corrPears, 4),
+        round(corrSpear, 4),
+        round(res_regModel.params[1], 4),
+        round(res_regModel.params[0], 4)
+    ])
+
 

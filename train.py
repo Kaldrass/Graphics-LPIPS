@@ -1,5 +1,5 @@
 import torch.backends.cudnn as cudnn
-cudnn.benchmark=False
+cudnn.benchmark=True
 
 import numpy as np
 import time
@@ -11,24 +11,82 @@ from util.visualizer import Visualizer
 from IPython import embed
 from Test_TestSet import Test_TestSet
 import csv
+import multiprocessing
+import torch
 
-if __name__ == '__main__':
+
+class CUDAPrefetcher:
+    def __init__(self, loader_iterable, device):
+        # 'loader_iterable' peut être un DataLoader ou l'itérable retourné par .load_data()
+        self.loader = iter(loader_iterable)
+        self.stream = torch.cuda.Stream()
+        self.device = device
+        self.next = None
+        self.preload()
+
+    def preload(self):
+        try:
+            batch = next(self.loader)
+        except StopIteration:
+            self.next = None
+            return
+        # On prépare le prochain batch sur un stream séparé
+        with torch.cuda.stream(self.stream):
+            moved = {}
+            for k, v in batch.items():
+                if torch.is_tensor(v):
+                    if v.dim() == 4:  # images: NCHW
+                        moved[k] = v.to(self.device, non_blocking=True)\
+                                   .contiguous(memory_format=torch.channels_last)
+                    else:
+                        moved[k] = v.to(self.device, non_blocking=True)
+                else:
+                    moved[k] = v
+            self.next = moved
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        # On attend que la pré-copie finisse
+        torch.cuda.current_stream().wait_stream(self.stream)
+        if self.next is None:
+            raise StopIteration
+        batch = self.next
+        self.preload()  # lance la pré-copie du batch suivant
+        return batch
+
+
+
+os.environ['PYTHONWARNINGS'] = 'ignore'
+
+train_name = 'TSMD_Gautier_NR_1VPn_fib'
+target = 'mos'  # 'mos' or 'judges', for TMQ put judges
+train_view_nbr = 1
+def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--datasets', type=str, nargs='+', default=['./dataset/TexturedDB_80%_TrainList_withnbPatchesPerVP_threth0.6.csv'], help='datasets to train on')
+    parser.add_argument('--datasets', type=str, nargs='+', default=['./dataset/TexturedDB_80%_TrainList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/TSMD_80%_TrainList_scaled.csv'], help='datasets to train on')
+    parser.add_argument('--testcsv', type=str, nargs='+', default=['./dataset/TexturedDB_20%_TrainList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/TSMD_20%_TestList_scaled.csv'], help='datasets to test on')
+    
+
+    parser.add_argument('--src_root', type=str, nargs='+', default=r'D:\These\Projets\CompareMetrics\out\TSMD\New_Render\Fibonacci', help='root folder containing ref and dist folders')
+    parser.add_argument('--root_refPatches', type=str, nargs='+', default="\\Source\\"+ str(train_view_nbr) +'VP', help='reference patches relative location')
+    parser.add_argument('--root_distPatches', type=str, nargs='+', default="\\Distorted\\" + str(train_view_nbr) + 'VP', help='distorted patches relative location')
+
     parser.add_argument('--model', type=str, default='lpips', help='distance model type [lpips] for linearly calibrated net, [baseline] for off-the-shelf network, [l2] for euclidean distance, [ssim] for Structured Similarity Image Metric')
     parser.add_argument('--net', type=str, default='alex', help='[squeeze], [alex], or [vgg] for network architectures')
     #parser.add_argument('--batch_size', type=int, default=50, help='batch size to test image patches in')
-    parser.add_argument('--use_gpu', action='store_true', help='turn on flag to use GPU')
+    parser.add_argument('--use_gpu', action='store_true', help='turn on flag to use GPU', default=True)
     parser.add_argument('--gpu_ids', type=int, nargs='+', default=[0], help='gpus to use')
 
-    parser.add_argument('--nThreads', type=int, default=10, help='number of threads to use in data loader')
+    parser.add_argument('--nThreads', type=int, default=12, help='number of threads to use in data loader') 
     parser.add_argument('--nepoch', type=int, default=5, help='# epochs at base learning rate')
     parser.add_argument('--nepoch_decay', type=int, default=5, help='# additional epochs at linearly learning rate')
-    parser.add_argument('--npatches', type=int, default=65, help='# randomly sampled image patches')
+    parser.add_argument('--npatches', type=int, default=150, help='# randomly sampled image patches')
     parser.add_argument('--nInputImg', type=int, default=4, help='# stimuli/images in each batch')
     parser.add_argument('--lr', type=float, default=0.0001, help='# initial learning rate')
     
-    parser.add_argument('--testset_freq', type=int, default=5, help='frequency of evaluating the testset')
+    parser.add_argument('--testset_freq', type=int, default=2, help='frequency of evaluating the testset')
     parser.add_argument('--display_freq', type=int, default=50000, help='frequency (in instances) of showing training results on screen')
     parser.add_argument('--print_freq', type=int, default=50000, help='frequency (in instances) of showing training results on console')
     parser.add_argument('--save_latest_freq', type=int, default=20000, help='frequency (in instances) of saving the latest results')
@@ -38,7 +96,7 @@ if __name__ == '__main__':
     parser.add_argument('--display_port', type=int, default=8001,  help='visdom display port')
     parser.add_argument('--use_html', action='store_true', help='save off html pages')
     parser.add_argument('--checkpoints_dir', type=str, default='checkpoints', help='checkpoints directory')
-    parser.add_argument('--name', type=str, default='tmp', help='directory name for training')
+    parser.add_argument('--name', type=str, default=train_name, help='directory name for training')
 
     parser.add_argument('--from_scratch', action='store_true', help='model was initialized from scratch')
     parser.add_argument('--train_trunk', action='store_true', help='model trunk was trained/tuned')
@@ -50,11 +108,14 @@ if __name__ == '__main__':
     opt.save_dir = os.path.join(opt.checkpoints_dir,opt.name)
     if(not os.path.exists(opt.save_dir)):
         os.mkdir(opt.save_dir)
-
     # initialize model
     trainer = lpips.Trainer()
-    trainer.initialize(model=opt.model, net=opt.net, use_gpu=opt.use_gpu, is_train=True, lr=opt.lr,
-        pnet_rand=opt.from_scratch, pnet_tune=opt.train_trunk, gpu_ids=opt.gpu_ids)
+    # trainer.initialize(model=opt.model, net=opt.net, use_gpu=opt.use_gpu, is_train=True, lr=opt.lr,
+    #   pnet_rand=opt.from_scratch, pnet_tune=opt.train_trunk, gpu_ids=opt.gpu_ids)
+    trainer.initialize(model=opt.model, net=opt.net, use_gpu=True, use_amp=True, is_train=True, lr=opt.lr,
+        pnet_rand=opt.from_scratch, pnet_tune=opt.train_trunk, gpu_ids=[0])
+    
+    print("Model on:", next(trainer.net.parameters()).device)
 
     load_size = 64 # default value is 64
 
@@ -62,9 +123,12 @@ if __name__ == '__main__':
 
     # load data from all test sets 
     # The random patches for the test set are only sampled once at the beginning of training in order to avoid noise in the validation loss.
-    Testset = './dataset/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv'
+    Testset = opt.testcsv[1]
     data_loader_testSet = dl.CreateDataLoader(Testset,dataset_mode='2afc', Nbpatches= opt.npatches, 
-                                              load_size = load_size, batch_size=opt.batch_size, nThreads=opt.nThreads)
+                                              load_size = load_size, batch_size=opt.batch_size, nThreads=opt.nThreads,
+                                              pin_memory=True, persistent_workers=True, prefetch_factor=4, 
+                                              src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches,
+                                              target = target)
     test_TestSet = Test_TestSet(opt)
     total_steps = 0
     # fid = open(os.path.join(opt.checkpoints_dir,opt.name,'train_log.txt'),'w+')
@@ -73,32 +137,49 @@ if __name__ == '__main__':
         # f_hyperParam.write("nepoch,nepoch_decay,npatches,nInputImg,lr,epoch,TrainLoss,testLoss,SROCC_testset\n")
     
     start_time = time.time()
+    print('Start training with the following options:')
+    for k, v in sorted(vars(opt).items()):  
+        print('%s: %s' % (str(k), str(v)))
+    print('Total number of patches: %d, batch size: %d, input images per batch: %d' % (opt.npatches, opt.batch_size, opt.nInputImg))
+    print('Total number of epochs: %d, learning rate: %.6f' % (opt.nepoch + opt.nepoch_decay, opt.lr))
     for epoch in range(1, opt.nepoch + opt.nepoch_decay + 1):
             # Load training data to sample random patches every epoch
-            data_loader = dl.CreateDataLoader(opt.datasets,dataset_mode='2afc', trainset=True, Nbpatches=opt.npatches, 
-                                              load_size = load_size, batch_size=opt.batch_size, serial_batches=True, nThreads=opt.nThreads)
+            # torch.cuda.empty_cache()
+            # torch.cuda.synchronize()
+            data_loader = dl.CreateDataLoader(opt.datasets[1],dataset_mode='2afc', trainset=True, Nbpatches=opt.npatches, 
+                                              load_size = load_size, batch_size=opt.batch_size, serial_batches=True, nThreads=opt.nThreads, 
+                                              isTrain=True, shuffle=True, pin_memory=True, persistent_workers=True, prefetch_factor=4, 
+                                              src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, 
+                                              target=target)
+
             dataset = data_loader.load_data()
             dataset_size = len(data_loader)
             D = len(dataset)
+            print('Epoch %d, dataset size: %d' % (epoch, dataset_size))
+
+            device = torch.device('cuda:0')
+            prefetch = CUDAPrefetcher(dataset, device)
 
             epoch_start_time = time.time()
             nb_batches = 0 
             Loss_trainset = 0 
-            for i, data in enumerate(dataset):
+            for i, data in enumerate(prefetch): 
                 iter_start_time = time.time()
                 total_steps += opt.batch_size
                 epoch_iter = total_steps - dataset_size * (epoch - 1)
 
                 trainer.set_input(data)
+                if i%50 == 0:
+                    print('Epoch %d, Batch %d / %d, Total Steps %d' % (epoch, i, dataset_size, total_steps))
                 trainer.optimize_parameters()
 
-                # if total_steps % opt.display_freq == 0:
-                    # visualizer.display_current_results(trainer.get_current_visuals(), epoch)
+                if total_steps % opt.display_freq == 0:
+                    visualizer.display_current_results(trainer.get_current_visuals(), epoch)
 
                 errors = trainer.get_current_errors() # current error per batch
                 Loss_trainset += errors['loss_total'] # total loss over trainset = sum(Loss/batch)/nb_batches
                 nb_batches += 1 
-
+                # torch.cuda.empty_cache()
                 # if total_steps % opt.print_freq == 0:
                     # t = (time.time()-iter_start_time)/opt.batch_size
                     # t2o = (time.time()-epoch_start_time)/3600.
@@ -152,3 +233,7 @@ if __name__ == '__main__':
     #f_hyperParam.close()
     print( 'End of %d epochs. Time taken: %d sec' %(opt.nepoch + opt.nepoch_decay,  time.time() -  start_time))
     
+if __name__ == '__main__':
+    multiprocessing.set_start_method('spawn')
+    main()
+    # embed()  # Uncomment to debug with IPython

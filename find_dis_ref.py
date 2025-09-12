@@ -1,8 +1,8 @@
 # those functions are used to find all the references and distortions files for Light_GraphicsLPIPS_csv.py
 import os
 def find_ref_csvfiles(root_refPatches): 
-    # Root_ref_patches = '..../out/dataset_ref_metod_XVP_NNNN/'
-    # The objective is to find all the .cvs files of the patchified reference images
+    # Root_ref_patches = '..../out/dataset_ref_method_XVP_NNNN/'
+    # The objective is to find all the .csv files of the patchified reference images
     # We return a list of the paths of the .csv files
     # The architecture of the folders is as follows:
     
