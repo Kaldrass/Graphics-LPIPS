@@ -60,16 +60,19 @@ class CUDAPrefetcher:
 
 os.environ['PYTHONWARNINGS'] = 'ignore'
 
-train_name = 'TSMD_Gautier_NR_4VPn_fib'
-target = 'mos'  # 'mos' or 'judges', for TMQ put judges
-train_view_nbr = 4
+train_name = 'TSMD_NR_1VPn_Yf'
+train_view_nbr = 1
+target = 'mos'#'judges'  # 'mos' or 'judges', for TMQ put judges
+view_method = 'Y_fixed_0.3' # 'Fibonacci', 'Y_fixed_0.3' or 'Polyhedron'
+render_method = 'New_Render' # 'New_Render' or 'Old_render'
+database = 'TSMD' # 'TSMD' or 'BASICS(PC)_DB' or 'TMQ'
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--datasets', type=str, nargs='+', default=['./dataset/TexturedDB_80%_TrainList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/TSMD_80%_TrainList_scaled.csv'], help='datasets to train on')
-    parser.add_argument('--testcsv', type=str, nargs='+', default=['./dataset/TexturedDB_20%_TrainList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/TSMD_20%_TestList_scaled.csv'], help='datasets to test on')
+    parser.add_argument('--testcsv', type=str, nargs='+', default=['./dataset/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/TSMD_20%_TestList_scaled.csv'], help='datasets to test on')
     
 
-    parser.add_argument('--src_root', type=str, nargs='+', default=r'D:\These\Projets\CompareMetrics\out\TSMD\New_Render\Fibonacci', help='root folder containing ref and dist folders')
+    parser.add_argument('--src_root', type=str, nargs='+', default="D:\\These\\Projets\\CompareMetrics\\out\\"+ database +"\\"+ render_method +"\\" + view_method, help='root folder containing ref and dist folders')
     parser.add_argument('--root_refPatches', type=str, nargs='+', default="\\Source\\"+ str(train_view_nbr) +'VP', help='reference patches relative location')
     parser.add_argument('--root_distPatches', type=str, nargs='+', default="\\Distorted\\" + str(train_view_nbr) + 'VP', help='distorted patches relative location')
 
@@ -79,7 +82,7 @@ def main():
     parser.add_argument('--use_gpu', action='store_true', help='turn on flag to use GPU', default=True)
     parser.add_argument('--gpu_ids', type=int, nargs='+', default=[0], help='gpus to use')
 
-    parser.add_argument('--nThreads', type=int, default=12, help='number of threads to use in data loader') 
+    parser.add_argument('--nThreads', type=int, default=24, help='number of threads to use in data loader') 
     parser.add_argument('--nepoch', type=int, default=5, help='# epochs at base learning rate')
     parser.add_argument('--nepoch_decay', type=int, default=5, help='# additional epochs at linearly learning rate')
     parser.add_argument('--npatches', type=int, default=150, help='# randomly sampled image patches')
@@ -123,7 +126,7 @@ def main():
 
     # load data from all test sets 
     # The random patches for the test set are only sampled once at the beginning of training in order to avoid noise in the validation loss.
-    Testset = opt.testcsv[1]
+    Testset = opt.testcsv[1 if target=='mos' else 0]
     data_loader_testSet = dl.CreateDataLoader(Testset,dataset_mode='2afc', Nbpatches= opt.npatches, 
                                               load_size = load_size, batch_size=opt.batch_size, nThreads=opt.nThreads,
                                               pin_memory=True, persistent_workers=True, prefetch_factor=4, 
@@ -146,7 +149,7 @@ def main():
             # Load training data to sample random patches every epoch
             # torch.cuda.empty_cache()
             # torch.cuda.synchronize()
-            data_loader = dl.CreateDataLoader(opt.datasets[1],dataset_mode='2afc', trainset=True, Nbpatches=opt.npatches, 
+            data_loader = dl.CreateDataLoader(opt.datasets[1 if target=='mos' else 0],dataset_mode='2afc', trainset=True, Nbpatches=opt.npatches, 
                                               load_size = load_size, batch_size=opt.batch_size, serial_batches=True, nThreads=opt.nThreads, 
                                               isTrain=True, shuffle=True, pin_memory=True, persistent_workers=True, prefetch_factor=4, 
                                               src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, 
