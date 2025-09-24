@@ -355,22 +355,35 @@ import torchvision.transforms as transforms
 from pathlib import Path
 from collections import OrderedDict
 from typing import Optional
+import re
+
 _img_cache = OrderedDict()
 _img_cache_bytes = 0
-_IMG_CACHE_LIMIT = 8 * 1024**3   # ~8 Go à ajuster
+_IMG_CACHE_LIMIT = 256 * 1024**2   # ~256 Mo 
 _img_cache_lock = threading.Lock()
-
+_COPY_SEM = threading.Semaphore(2) # 2 copies simultanées max
 cv2.setNumThreads(0) # Avoid overthreading from open-cv
 
 def imread_cached_bgr(path: str):
     global _img_cache, _img_cache_bytes
+    # If RAM limit exceeded, use cv2.imread directly (no cache)
+    if _IMG_CACHE_LIMIT <= 0:
+        img = cv2.imread(path, cv2.IMREAD_COLOR)  # BGR uint8
+        if img is None:
+            raise RuntimeError(f"Image not found : {path}")
+        return img
+    # Try to get from cache
     with _img_cache_lock:
         arr = _img_cache.get(path)
         if arr is not None:
             _img_cache.move_to_end(path)
             return arr
-    buf = np.fromfile(path, dtype=np.uint8)           # Windows-safe (pas de handle persistant)
-    img = cv2.imdecode(buf, cv2.IMREAD_COLOR)         # BGR uint8
+    try:
+        buf = np.fromfile(path, dtype=np.uint8)           # Windows-safe (pas de handle persistant)
+        img = cv2.imdecode(buf, cv2.IMREAD_COLOR)   
+    except Exception as e:
+        # Fallback if missing memory (ArrayMemoryError) or decode error
+        img = cv2.imread(path, cv2.IMREAD_COLOR)  # BGR uint8
     if img is None:
         raise RuntimeError(f"Image introuvable : {path}")
     sz = img.nbytes
@@ -410,6 +423,16 @@ def ensure_on_ssd(src_path: str, src_root: Optional[str], cache_root: Optional[s
 
     sroot = Path(src_root).resolve() if src_root else None
     croot = Path(cache_root).resolve()
+    # Si déjà sur le même disque (même lettre sous Windows), le gain est faible → on évite la copie
+    try:
+        if src.drive and croot.drive and (src.drive.lower() == croot.drive.lower()):
+            return str(src)
+    except Exception:
+        pass
+    # Si le fichier est déjà dans le cache, inutile de copier
+    if str(src).lower().startswith(str(croot).lower()):
+        return str(src)
+    
     try:
         rel = src.resolve().relative_to(sroot) if sroot else src.name
         dst = (croot / rel).resolve()
@@ -422,34 +445,37 @@ def ensure_on_ssd(src_path: str, src_root: Optional[str], cache_root: Optional[s
         return str(dst)
 
     lock = dst.with_suffix(dst.suffix + ".lock")
-
     for _ in range(retries):
         try:
-            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.close(fd)
-            try:
-                tmp = dst.with_suffix(dst.suffix + f".tmp.{os.getpid()}.{threading.get_ident()}")
-                shutil.copy2(str(src), str(tmp))
-                os.replace(str(tmp), str(dst))
-            finally:
+            with _COPY_SEM:  # limite la concurrence globale
+                fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.close(fd)
                 try:
-                    os.remove(str(lock))
-                except FileNotFoundError:
-                    pass
+                    tmp = dst.with_suffix(dst.suffix + f".tmp.{os.getpid()}.{threading.get_ident()}")
+                    shutil.copy2(str(src), str(tmp))
+                    os.replace(str(tmp), str(dst))
+                finally:
+                    try:
+                        os.remove(str(lock))
+                    except FileNotFoundError:
+                        pass
             return str(dst)
         except FileExistsError:
             if dst.exists():
                 return str(dst)
             time.sleep(sleep)
-        except PermissionError:
+        except (PermissionError, OSError) as e:
+            # Ex: WinError 1450 → on attend un peu puis on retente; en dernier ressort, on retourne la source
+            # print(f"[cache] copy retry due to: {e}")
             time.sleep(sleep)
-
-    # Au pire, on lit à la source
+    # Fallback: on ne bloque pas l'entraînement pour du cache
+    # print("[cache] fallback to source (copy retries exhausted)")
     return str(src)
 
 class TwoAFCDataset(Dataset):
     def __init__(self, dataroots, load_size=64, Trainset=False, maxNbPatches=205, 
-                 root_refPatches=None, root_distPatches=None, src_root=None, target=None, img_ext='auto'):
+                 root_refPatches=None, root_distPatches=None, src_root=None, target=None, img_ext='auto',
+                 cache_root: Optional[str] = r'C:\Graphics_LPIPS\cache', ram_cache_limit_mb: int = 256):
         self.target = target
         self.patch_entries = []
         # self.transform = transforms.Compose([
@@ -459,12 +485,19 @@ class TwoAFCDataset(Dataset):
         # ])
 
         # Racines des répertoires
-        self.cache_root = r'C:\Graphics_LPIPS\cache'
+        self.cache_root = cache_root #r'C:\Graphics_LPIPS\cache'
         self.src_root = src_root
         self.root_refPatches =  self.src_root + root_refPatches
         self.root_distPatches = self.src_root + root_distPatches
         self.img_ext = img_ext
         root_judges = r'D:\These\Graphics-LPIPS\dataset\judge_trainingset' if Trainset else r'D:\These\Graphics-LPIPS\dataset\judge_testset'
+        # Limit of RAM cache for images per worker
+        # SET ram_cache_limit_mb to 0 to disable RAM cache and use cv2.imread directly
+        global _IMG_CACHE_LIMIT
+        try: 
+            _IMG_CACHE_LIMIT = int(ram_cache_limit_mb) * 1024**2
+        except Exception:
+            _IMG_CACHE_LIMIT = 256 * 1024**2
 
         if Trainset:
             shuffled_inputfile = []
@@ -501,19 +534,21 @@ class TwoAFCDataset(Dataset):
                         patch_data = list(patch_reader)
                         patch_size = int(patch_header[4].split('=')[1])
                         nb_patches_per_view = [int(x.split('=')[1]) for x in patch_header[7:]]
+                        nviews = len(nb_patches_per_view)
 
                     nb_patches_total = sum(nb_patches_per_view)
-                    nb_full = maxNbPatches // nb_patches_total
-                    nb_rand = maxNbPatches % nb_patches_total
 
+                    nb_full = maxNbPatches // nb_patches_total if nb_patches_total < maxNbPatches else 1 
+                    nb_rand = maxNbPatches % nb_patches_total if nb_patches_total < maxNbPatches else 0
+                    # Like this it's minimum one full set of patches
                     for _ in range(nb_full):
                         view_counter = 1
                         patch_seen = 0
                         for pd in patch_data:
                             x, y = int(pd[0]), int(pd[1])
                             self.patch_entries.append({
-                                'ref_path': os.path.join(ref_view_folder, f"view_{view_counter}.png"),
-                                'dis_path': os.path.join(dis_view_folder, f"view_{view_counter}.png"),
+                                'ref_path': pick_view_path(ref_view_folder, view_counter, self.img_ext),
+                                'dis_path': pick_view_path(dis_view_folder, view_counter, self.img_ext),
                                 'x': x,
                                 'y': y,
                                 'mos': mos,
@@ -537,8 +572,8 @@ class TwoAFCDataset(Dataset):
                                     break
                             x, y = int(patch_data[idx][0]), int(patch_data[idx][1])
                             self.patch_entries.append({
-                                'ref_path': os.path.join(ref_view_folder, f"view_{view_num}.png"),
-                                'dis_path': os.path.join(dis_view_folder, f"view_{view_num}.png"),
+                                'ref_path': pick_view_path(ref_view_folder, view_num, self.img_ext),
+                                'dis_path': pick_view_path(dis_view_folder, view_num, self.img_ext),
                                 'x': x,
                                 'y': y,
                                 'mos': mos,
@@ -553,35 +588,38 @@ class TwoAFCDataset(Dataset):
         entry = self.patch_entries[index]
             
         def load_patch(path, x, y, size):
+            """Retourne un patch image **NumPy uint8** en format HWC (RGB)."""
             img_path = ensure_on_ssd(path, self.src_root, self.cache_root)
-            img = cv2.imread(img_path)                                  # BGR
-            if img is None:
+            # Utilise la version avec cache RAM si dispo
+            img_bgr = imread_cached_bgr(img_path)   # np.uint8, HWC (BGR)
+            if img_bgr is None:
                 raise RuntimeError(f"Image not found : {path}")
-            patch_bgr = img[y:y+size, x:x+size]
-            # (facultatif mais utile) : vérifie que le crop est bien dans l'image
+            patch_bgr = img_bgr[y:y+size, x:x+size]
             if patch_bgr.shape[0] != size or patch_bgr.shape[1] != size:
-                raise ValueError(f"Patch out of bounds: img={img.shape}, "
-                                f"x={x},y={y},size={size}")
-            patch_rgb = cv2.cvtColor(patch_bgr, cv2.COLOR_BGR2RGB)      # contigu, strides positifs
-            t = torch.from_numpy(patch_rgb).permute(2,0,1).contiguous().float().div_(255.0)
-            t.sub_(0.5).div_(0.5)
-            return t
+                raise ValueError(f"Patch out of bounds: img={img_bgr.shape}, x={x}, y={y}, size={size}")
+            patch_rgb = cv2.cvtColor(patch_bgr, cv2.COLOR_BGR2RGB)  # np.uint8, HWC
+            return patch_rgb.copy()  # s'assure de la contiguïté
 
-        ref_patch = load_patch(entry['ref_path'], entry['x'], entry['y'], entry['patch_size'])
-        dis_patch = load_patch(entry['dis_path'], entry['x'], entry['y'], entry['patch_size'])
+         # --- images en NumPy HWC -> CHW uint8 ---
+        ref_hwc = load_patch(entry['ref_path'], entry['x'], entry['y'], entry['patch_size'])
+        dis_hwc = load_patch(entry['dis_path'], entry['x'], entry['y'], entry['patch_size'])
+        ref_chw = np.ascontiguousarray(np.transpose(ref_hwc, (2, 0, 1)), dtype=np.uint8)
+        dis_chw = np.ascontiguousarray(np.transpose(dis_hwc, (2, 0, 1)), dtype=np.uint8)
+
+        # --- labels en float32 NumPy ---
         try:
             if self.target == "mos":
-                judge = torch.tensor(entry['mos'], dtype=torch.float32).view(1,1,1)
+                judge = np.array([[[entry['mos']]]], dtype=np.float32)  # (1,1,1)
             else:
-                judge = torch.from_numpy(np.load(entry['judge_path'])).float().view(1,1,1)
+                judge = np.load(entry['judge_path']).astype(np.float32).reshape(1,1,1)
         except Exception as e:
             raise RuntimeError(f"Error loading {entry['judge_path']}: {e}")
-
+        
         return {
-            'ref': ref_patch,
-            'p0': dis_patch,
-            'judge': judge,
-            'mos': torch.tensor(entry['mos']).view(1, 1, 1),
+            'ref': ref_chw,      # np.uint8 CHW
+            'p0': dis_chw,       # np.uint8 CHW
+            'judge': judge,      # np.float32 (1,1,1)
+            'mos': np.array([[[entry['mos']]]], dtype=np.float32),
             'stimuli_id': entry['stimuli_id']
         }
     def __len__(self):

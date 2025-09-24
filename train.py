@@ -17,7 +17,6 @@ import torch
 
 class CUDAPrefetcher:
     def __init__(self, loader_iterable, device):
-        # 'loader_iterable' peut être un DataLoader ou l'itérable retourné par .load_data()
         self.loader = iter(loader_iterable)
         self.stream = torch.cuda.Stream()
         self.device = device
@@ -25,47 +24,78 @@ class CUDAPrefetcher:
         self.preload()
 
     def preload(self):
+        import numpy as np
         try:
-            batch = next(self.loader)
+            batch = next(self.loader)   # dict de np.ndarray
         except StopIteration:
             self.next = None
             return
-        # On prépare le prochain batch sur un stream séparé
         with torch.cuda.stream(self.stream):
             moved = {}
             for k, v in batch.items():
-                if torch.is_tensor(v):
-                    if v.dim() == 4:  # images: NCHW
-                        moved[k] = v.to(self.device, non_blocking=True)\
-                                   .contiguous(memory_format=torch.channels_last)
+                if isinstance(v, np.ndarray):
+                    t = torch.from_numpy(v)  # CPU tensor
+                    # On "pin" pour copie H2D async
+                    if t.dtype == torch.uint8 and t.dim() == 4:  # images NCHW
+                        t = t.pin_memory().to(self.device, non_blocking=True).to(torch.float32)
+                        t.div_(255.0).sub_(0.5).div_(0.5)
+                        t = t.contiguous(memory_format=torch.channels_last)
+                    elif t.dtype == torch.float32:
+                        t = t.pin_memory().to(self.device, non_blocking=True)
                     else:
-                        moved[k] = v.to(self.device, non_blocking=True)
+                        t = t.pin_memory().to(self.device, non_blocking=True)
+                    moved[k] = t
+                elif torch.is_tensor(v):
+                    # cas improbable si un tensor passe quand même
+                    t = v
+                    if t.device.type == 'cpu':
+                        t = t.pin_memory().to(self.device, non_blocking=True)
+                    else:
+                        t = t.to(self.device, non_blocking=True)
+                    if t.dim() == 4 and t.dtype == torch.float32:
+                        t = t.contiguous(memory_format=torch.channels_last)
+                    moved[k] = t
                 else:
                     moved[k] = v
             self.next = moved
 
-    def __iter__(self):
-        return self
-
+    def __iter__(self): return self
     def __next__(self):
-        # On attend que la pré-copie finisse
         torch.cuda.current_stream().wait_stream(self.stream)
-        if self.next is None:
-            raise StopIteration
+        if self.next is None: raise StopIteration
         batch = self.next
-        self.preload()  # lance la pré-copie du batch suivant
+        self.preload()
         return batch
-
+    
+# collate function to handle numpy arrays in the batch (for CUDAPrefetcher), avoid shared memory issue, return numpa arrays, not tensors
+def collate_to_numpy(batch):
+    import numpy as np
+    out = {}
+    keys = batch[0].keys()
+    for k in keys:
+        vals = [b[k] for b in batch]
+        if k in ('ref', 'p0', 'judge', 'mos'):
+            arrs = []
+            for v in vals:
+                if torch.is_tensor(v):
+                    arrs.append(v.numpy())               # tensor CPU -> np
+                elif isinstance(v, np.ndarray):
+                    arrs.append(v)
+                else:
+                    arrs.append(np.asarray(v))
+            out[k] = np.stack(arrs, axis=0)              # N,C,H,W ou N,1,1,1
+        else:
+            out[k] = np.array(vals)                      # ids etc.
+    return out
 
 
 os.environ['PYTHONWARNINGS'] = 'ignore'
-
-train_name = 'TSMD_NR_1VPn_Yf'
-train_view_nbr = 1
-target = 'mos'#'judges'  # 'mos' or 'judges', for TMQ put judges
-view_method = 'Y_fixed_0.3' # 'Fibonacci', 'Y_fixed_0.3' or 'Polyhedron'
+train_name = 'TMQ_NR_8VPn_fib'
+train_view_nbr = 8
+target = 'judges'#'judges'  # 'mos' or 'judges', for TMQ put judges
+view_method = 'Fibonacci' # 'Fibonacci', 'Y_fixed_0.3' or 'Polyhedron'
 render_method = 'New_Render' # 'New_Render' or 'Old_render'
-database = 'TSMD' # 'TSMD' or 'BASICS(PC)_DB' or 'TMQ'
+database = 'TMQ' # 'TSMD' or 'BASICS(PC)_DB' or 'TMQ'
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--datasets', type=str, nargs='+', default=['./dataset/TexturedDB_80%_TrainList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/TSMD_80%_TrainList_scaled.csv'], help='datasets to train on')
@@ -128,10 +158,10 @@ def main():
     # The random patches for the test set are only sampled once at the beginning of training in order to avoid noise in the validation loss.
     Testset = opt.testcsv[1 if target=='mos' else 0]
     data_loader_testSet = dl.CreateDataLoader(Testset,dataset_mode='2afc', Nbpatches= opt.npatches, 
-                                              load_size = load_size, batch_size=opt.batch_size, nThreads=opt.nThreads,
-                                              pin_memory=True, persistent_workers=True, prefetch_factor=4, 
+                                              load_size = load_size, batch_size=opt.batch_size, nThreads=opt.nThreads, # No parallelism needed for testing
+                                              pin_memory=True, persistent_workers=True, 
                                               src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches,
-                                              target = target)
+                                              target = target, ram_cache_limit_mb=0) 
     test_TestSet = Test_TestSet(opt)
     total_steps = 0
     # fid = open(os.path.join(opt.checkpoints_dir,opt.name,'train_log.txt'),'w+')
@@ -145,20 +175,24 @@ def main():
         print('%s: %s' % (str(k), str(v)))
     print('Total number of patches: %d, batch size: %d, input images per batch: %d' % (opt.npatches, opt.batch_size, opt.nInputImg))
     print('Total number of epochs: %d, learning rate: %.6f' % (opt.nepoch + opt.nepoch_decay, opt.lr))
+    
+    data_loader = dl.CreateDataLoader(opt.datasets[1 if target=='mos' else 0],dataset_mode='2afc', trainset=True, Nbpatches=opt.npatches, 
+                                        load_size = load_size, batch_size=opt.batch_size, serial_batches=True, nThreads=opt.nThreads, 
+                                        isTrain=True, shuffle=True, pin_memory=True, persistent_workers=True, 
+                                        src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, 
+                                        target=target, ram_cache_limit_mb=128)
+
+    dataset = data_loader.load_data()
+    dataset_size = len(data_loader)
+    D = len(dataset)
     for epoch in range(1, opt.nepoch + opt.nepoch_decay + 1):
             # Load training data to sample random patches every epoch
             # torch.cuda.empty_cache()
             # torch.cuda.synchronize()
-            data_loader = dl.CreateDataLoader(opt.datasets[1 if target=='mos' else 0],dataset_mode='2afc', trainset=True, Nbpatches=opt.npatches, 
-                                              load_size = load_size, batch_size=opt.batch_size, serial_batches=True, nThreads=opt.nThreads, 
-                                              isTrain=True, shuffle=True, pin_memory=True, persistent_workers=True, prefetch_factor=4, 
-                                              src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, 
-                                              target=target)
-
-            dataset = data_loader.load_data()
-            dataset_size = len(data_loader)
-            D = len(dataset)
-            print('Epoch %d, dataset size: %d' % (epoch, dataset_size))
+            num_batches = len(dataset)
+            num_samples = len(dataset.dataset)
+            # print('Epoch %d, dataset size: %d' % (epoch, dataset_size))<
+            print(f'Epoch {epoch}, batches: {num_batches}, samples: {num_samples}, bs={opt.batch_size}, workers={opt.nThreads}')
 
             device = torch.device('cuda:0')
             prefetch = CUDAPrefetcher(dataset, device)
@@ -216,7 +250,7 @@ def main():
 
             # Evaluate the Test set at the End of the epoch
             if epoch % opt.testset_freq == 0:
-                res_testset = lpips.Testset_DSIS(data_loader_testSet, trainer.forward, trainer.rankLoss.forward, name=Testset) # SROCC & loss
+                res_testset = lpips.Testset_DSIS(data_loader_testSet, trainer.forward, trainer.rankLoss.forward, name=Testset, use_amp=True) # SROCC & loss
                 for Tkey in res_testset.keys():
                     test_TestSet.plot_TestSet_save(epoch=epoch, res=res_testset, keys=[Tkey,],  name=Tkey, to_plot=opt.train_plot, what_to_plot = 'TestSet_Res')
                 info = str(opt.nepoch) + "," + str(opt.nepoch_decay) + "," + str(opt.npatches) + "," + str(opt.nInputImg) + "," + str(opt.lr) + "," + str(epoch) + "," + str(Loss_trainset) + "," + str(res_testset['loss']) + "," + str(res_testset['SROCC']) + "\n"

@@ -19,6 +19,8 @@ from statistics import mean
 import torch.backends.cuda as cuda_back
 import torch.backends.cudnn as cudnn
 import importlib.util
+import contextlib
+
 class Trainer():
     def name(self):
         return self.model_name
@@ -139,8 +141,7 @@ class Trainer():
             for module in self.net.modules():
                 if hasattr(module, 'weight') and getattr(module, 'kernel_size', None) == (1, 1):
                     module.weight.clamp_(min=0)
-
-
+    
     def set_input(self, data):
         self.input_ref = data['ref']
         self.input_p0 = data['p0']
@@ -274,71 +275,151 @@ class Trainer():
             tensor = tensor.cpu()
         return tensor.numpy()
 
+def Testset_DSIS(data_loader, func, funcLoss=None, name='', use_amp=False, amp_dtype=torch.bfloat16):
+    """
+    Évalue un DataLoader DSIS :
+      - func(ref, p0) -> d0 (distance par patch)
+      - funcLoss(pred, target) -> loss scalaire (optionnel)
+    Attend que data_loader.load_data() renvoie un torch DataLoader.
+    Chaque batch doit contenir au moins: 'ref', 'p0', 'judge', 'stimuli_id'.
+    'ref'/'p0' peuvent être np.ndarray uint8 (N,C,H,W) ou torch.Tensor.
+    'judge' peut être np.ndarray/tensor (N,1,1,1) ou (N,).
+    """
+    import contextlib
+    import numpy as np
+    import torch
+    from tqdm import tqdm
 
-def Testset_DSIS(data_loader, func, funcLoss = None, name=''): #added by yana
-    total = 0
-    SROCC = 0
-    val_loss = 0
-    val_MSE = 0
-    val_steps = 0
-    d0s = []
-    gts = []
-    MOSpredicteds = []
-    MOSs = []
-    
-    device = torch.device("cuda:0")
-    for data in tqdm(data_loader.load_data(), desc=name):
-        with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=True):
-            ref = data['ref'].to(device, non_blocking=True).contiguous(memory_format=torch.channels_last)
-            p0 = data['p0'].to(device, non_blocking=True).contiguous(memory_format=torch.channels_last)
-            d0 = func(ref, p0)  # use_gpu flag activated
-            gt = data['judge'].to(device, non_blocking=True)
+    # --------- helpers ----------
+    def _to_device_img(x, device):
+        """x: np.uint8 (N,C,H,W) ou torch (N,C,H,W); return torch.float32 normalisé [-1,1] sur device."""
+        if isinstance(x, np.ndarray):
+            t = torch.from_numpy(x)
+        else:
+            t = x
+        if t.dtype == torch.uint8:
+            t = t.to(device=device, non_blocking=True, dtype=torch.float32)
+            t.div_(255.0).sub_(0.5).div_(0.5)  # [0,255] -> [-1,1]
+        else:
+            t = t.to(device=device, non_blocking=True)
+            if t.dtype != torch.float32:
+                t = t.float()
+        return t.contiguous(memory_format=torch.channels_last)
 
-            stimulus = data['stimuli_id']
-            #stimulus = [p0path.split("\\PlaylistsStimuli_patches_withVP\\")[1] for p0path in data['p0_path']]
-            #stimulus = [stim.rsplit("_P", 1)[0] for stim in stimulus] # split according to the last occurence of "_P"
+    def _to_device_vec(x, device):
+        """x: np.ndarray/tensor, renvoie torch.float32 1D (N,) sur device."""
+        if isinstance(x, np.ndarray):
+            t = torch.from_numpy(x)
+        else:
+            t = x
+        t = t.to(device=device, non_blocking=True)
+        if t.dtype != torch.float32:
+            t = t.float()
+        return t.view(-1)
 
-            gt_ = (gt).cpu().numpy().flatten().tolist()
-        
-            mos = [mean(map(itemgetter(1), group))
-                for key, group in groupby(zip(stimulus, gt_), key=itemgetter(0))]
-            NbuniqueStimuli = len(mos) 
-            NbpatchesPerStimulus = len(gt_)//NbuniqueStimuli 
-        
-            MOS = torch.tensor(mos, dtype=torch.float32, device=device) #fp32
-            MOS = torch.reshape(MOS, (NbuniqueStimuli,1,1,1))
-        
-            d0_reshaped = torch.reshape(d0, (NbuniqueStimuli,NbpatchesPerStimulus,1,1)) 
-            MOSpredicted = torch.mean(d0_reshaped, 1, True).float() #fp32
-            
-            loss = funcLoss(MOSpredicted, MOS) 
-            val_loss += loss.detach().cpu().item() #detach().numpy() (if we remove "with torch.no_grad():" )
-            
-            # compute MSE manually
-            MSE = torch.mean((MOSpredicted-MOS) ** 2).detach().cpu().item() 
-            val_MSE += MSE
-            
-            total += gt.size(0)
-            val_steps += 1
-            
-            # # concatenate data to compute SROCC
-            # MOSpredicteds += MOSpredicted
-            # MOSs += MOS
-            ####### TypeError: can't convert cuda:0 device type tensor to numpy. Use Tensor.cpu() to copy the tensor to host memory first.
-            MOSpredicteds += MOSpredicted.detach().float().cpu().numpy().flatten().tolist()
-            MOSs += MOS.detach().float().cpu().numpy().flatten().tolist()
-    srocc = stats.spearmanr(MOSpredicteds, MOSs)[0]
-    loss = val_loss / val_steps
-    MSE = val_MSE / val_steps
-    
-    print('Testset Total %.3f'%total)
-    print('Testset val step = nb batches =  %.3f'%val_steps)
-    print('Testset Loss %.3f'%loss)
-    print('Testset MSE %.3f'%MSE)
-    print('SROCC %.3f'%srocc)
-    
-    resDict = dict([('loss', loss),
-                    ('MSE', MSE),
-                    ('SROCC', srocc)])
-    return(resDict)
+    def _to_device_ids(x, device):
+        """stimuli_id en 1D long sur device (accepte list/np/tensor)."""
+        if isinstance(x, np.ndarray):
+            t = torch.from_numpy(x)
+        elif isinstance(x, (list, tuple)):
+            t = torch.tensor(x)
+        else:
+            t = x
+        return t.to(device=device, dtype=torch.long).view(-1)
+
+    def _group_mean(values_1d, ids_1d):
+        """
+        Moyenne par id (aucune hypothèse de nb constant de patches).
+        values_1d: (N,), ids_1d: (N,) long.
+        Retourne (mean_per_id[K], ids_unique[K])
+        """
+        u, inv = torch.unique(ids_1d, return_inverse=True, sorted=True)
+        K = u.numel()
+        sums = torch.zeros(K, device=values_1d.device, dtype=values_1d.dtype)
+        cnts = torch.zeros(K, device=values_1d.device, dtype=values_1d.dtype)
+        sums.scatter_add_(0, inv, values_1d)
+        cnts.scatter_add_(0, inv, torch.ones_like(values_1d, dtype=values_1d.dtype))
+        means = sums / torch.clamp_min(cnts, 1e-12)
+        return means, u
+
+    # --------- boucle d'éval ----------
+    device = torch.device('cuda', 0) if torch.cuda.is_available() else torch.device('cpu')
+
+    tot_samples = 0
+    sum_loss = 0.0
+    sum_mse = 0.0
+    nb_steps = 0
+
+    all_pred = []  # liste de floats (MOS prédits par stimulus)
+    all_gt   = []  # liste de floats (MOS GT par stimulus)
+
+    dl = data_loader.load_data()
+
+    for data in tqdm(dl, desc=name):
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(torch.no_grad())
+            if use_amp and device.type == 'cuda':
+                stack.enter_context(torch.autocast(device_type="cuda", dtype=amp_dtype))
+
+            # 1) Prépare batch (images -> normalisées; labels/ids en 1D)
+            ref  = _to_device_img(data['ref'], device)     # (N,C,H,W), float32 [-1,1]
+            p0   = _to_device_img(data['p0'],  device)     # (N,C,H,W), float32 [-1,1]
+            gt   = _to_device_vec(data['judge'], device)   # (N,)
+            sid  = _to_device_ids(data['stimuli_id'], device)  # (N,) long
+
+            # 2) Forward par patch -> d0 (N,)
+            d0 = func(ref, p0)
+            d0 = _to_device_vec(d0, device)                # robust: aplati en (N,)
+
+            # 3) Moyenne par stimulus (pas besoin de nb_patches fixe)
+            mos_pred, ids_u = _group_mean(d0, sid)         # (K,), (K,)
+            mos_gt,   _     = _group_mean(gt, sid)         # (K,)
+
+            # 4) Loss / MSE (si demandée), au format attendu (K,1,1,1)
+            if funcLoss is not None:
+                pred4 = mos_pred.view(-1,1,1,1)            # (K,1,1,1)
+                gt4   = mos_gt.view(-1,1,1,1)              # (K,1,1,1)
+                loss_val = funcLoss(pred4, gt4)
+                sum_loss += float(loss_val.detach().cpu())
+            mse_val = torch.mean((mos_pred - mos_gt) ** 2).detach().cpu().item()
+            sum_mse += mse_val
+
+            # 5) stats / logs
+            tot_samples += int(gt.numel())
+            nb_steps += 1
+
+            all_pred.extend(mos_pred.detach().cpu().tolist())
+            all_gt.extend(mos_gt.detach().cpu().tolist())
+
+    # --------- agrégations finales ----------
+    # Spearman (scipy si dispo; sinon fallback)
+    try:
+        from scipy import stats as _scistats
+        srocc = float(_scistats.spearmanr(all_pred, all_gt)[0])
+    except Exception:
+        # Fallback spearman (rangs) en torch
+        def _rank(a):
+            t = torch.tensor(a, dtype=torch.float64)
+            # rangs denses stables
+            vals, inv = torch.sort(t)
+            ranks = torch.empty_like(inv, dtype=torch.float64)
+            ranks[inv] = torch.arange(1, len(t)+1, dtype=torch.float64)
+            return ranks
+        rp = _rank(all_pred)
+        rg = _rank(all_gt)
+        rp = rp - rp.mean()
+        rg = rg - rg.mean()
+        srocc = float((rp @ rg) / (rp.norm() * rg.norm() + 1e-12))
+
+    avg_loss = (sum_loss / nb_steps) if (nb_steps > 0 and funcLoss is not None) else 0.0
+    avg_mse  = (sum_mse  / nb_steps) if nb_steps > 0 else 0.0
+
+    print(f'Testset samples = {tot_samples}')
+    print(f'Testset steps   = {nb_steps}')
+    if funcLoss is not None:
+        print(f'Testset Loss   = {avg_loss:.6f}')
+    print(f'Testset MSE    = {avg_mse:.6f}')
+    print(f'SROCC          = {srocc:.6f}')
+
+    return {'loss': avg_loss, 'MSE': avg_mse, 'SROCC': srocc}
 
