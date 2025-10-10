@@ -44,11 +44,19 @@ ref_obj_list = correlation_VP.get_testset_ref_list(config.test_list_csv) # We wi
 # patches_csv_list = find_dis_ref.find_ref_csvfiles(root_refPatches)
 #views_folder = '..../out/ref_folder/obj_name/views'
 
-loss_fn = lpips.LPIPS(net='alex',version=opt.version, model_path = opt.modelpath)# e.g. model_path = './checkpoints/Trial1/latest_net_.pth'
-if(opt.use_gpu):
-    loss_fn.cuda()
-    print('Using GPU')
+loss_fn = lpips.LPIPS(net='alex', version=opt.version, pretrained=False)
 
+ckpt = torch.load(opt.modelpath, map_location="cpu") if opt.modelpath else None
+if ckpt is not None:
+    state = ckpt.get("net", ckpt) if isinstance(ckpt, dict) else ckpt
+    missing, unexpected = loss_fn.load_state_dict(state, strict=False)
+    if missing or unexpected:
+        print("[WARN] state_dict mismatch:", missing, unexpected)
+
+if opt.use_gpu:
+    loss_fn = loss_fn.cuda()
+loss_fn.eval()
+torch.set_grad_enabled(False)
     
 ## Output file
 #If the file already exists, we delete it
@@ -135,8 +143,11 @@ for ref_obj in ref_obj_list:
                             batch0 = torch.cat([lpips.im2tensor(p).cuda() for p in patches0], dim=0)
                             batch1 = torch.cat([lpips.im2tensor(p).cuda() for p in patches1], dim=0)
                             with torch.no_grad():
-                                dists = loss_fn(batch0, batch1).view(-1).cpu().numpy()
-                            GraphicsLPIPS = dists.mean()
+                                dists_t = loss_fn(batch0, batch1)           # [N] ou [N,1]
+                                dists_t = dists_t.view(-1)
+                                dists_np = dists_t.detach().cpu().numpy()
+                                np.clip(dists_np, 0.0, 1.0, out=dists)
+                            GraphicsLPIPS = float(dists.mean())
                             List_GraphicsLPIPS.append(GraphicsLPIPS)
 
                         # Nouveau point de vue
@@ -162,6 +173,7 @@ for ref_obj in ref_obj_list:
                 batch1 = torch.cat([lpips.im2tensor(p).cuda() for p in patches1], dim=0)
                 with torch.no_grad():
                     dists = loss_fn(batch0, batch1).view(-1).cpu().numpy()
+                    np.clip(dists, 0.0, 1.0, out=dists)
                 GraphicsLPIPS = dists.mean()
                 List_GraphicsLPIPS.append(GraphicsLPIPS)
 

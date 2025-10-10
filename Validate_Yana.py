@@ -22,7 +22,7 @@ import correlation_VP
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-f','--csvfile', type=str, default='./dataset/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv')
-parser.add_argument('-m','--modelpath', type=str, default='./checkpoints/GraphicsLPIPS_FinalNetwork/latest_net_.pth', help='location of model')
+parser.add_argument('-m','--modelpath', type=str, default='./checkpoints/TMQ_OR_1VPn_org/latest_net_.pth', help='location of model')
 parser.add_argument('-o','--out', type=str, default='./out/TMQ_Yana_ORG/', help='output folder. Do not forget to add the name of the database and end with \'/\'.')
 parser.add_argument('-v','--version', type=str, default='0.1')
 parser.add_argument('--use_gpu', action='store_true', default=True, help='turn on flag to use GPU')
@@ -40,7 +40,7 @@ ref_obj_list = correlation_VP.get_testset_ref_list(test_list_csv) # We will take
 # dis_obj_list = correlation_VP.get_testset_dis_list(test_list_csv) # We will take the distorted objects from the CSV file. The function 'get_dis_obj_list' will return a list of the distorted objects.
 # ------------------------------- YANA VALIDATION VARIABLES -------------------------------
 root_vp1_dis = "D:/These/BDD/TMQ/Subset of 3000 stimuli/Snapshots_Distorted_Stimuli/VP1"
-root_vp1_ref = "D:/These/Projets/CompareMetrics/out/TMQ_REF_YANA"
+root_vp1_ref = "D:/These/Projets/CompareMetrics/out/TMQ/Old_Render/Original/Source/1VP"
 
 # root_vp1_ref = "D:/These/BDD/TMQ/Subset of 3000 stimuli/Snapshots_Reference/VP1"
 

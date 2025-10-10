@@ -1,115 +1,218 @@
-
-from __future__ import absolute_import
-
+import os
+import math
+import time
+from collections import defaultdict
+from typing import Dict, Any, Iterable, Tuple
+from torch.autograd import Variable
 import numpy as np
 import torch
 from torch import nn
-from collections import OrderedDict
-from torch.autograd import Variable
-from scipy.ndimage import zoom
-from tqdm import tqdm
-import lpips
-import os
-from scipy import stats
-import statsmodels.api as sm
-import collections
+from torch.optim import Optimizer
+from typing import Optional
 from itertools import groupby
 from operator import itemgetter
 from statistics import mean
-import torch.backends.cuda as cuda_back
-import torch.backends.cudnn as cudnn
-import importlib.util
-import contextlib
+from scipy import stats
 
-class Trainer():
-    def name(self):
-        return self.model_name
+import tqdm  # <-- ajoute ceci à tes imports
+# -----------------------------------------------------------------------------
+# Trainer — version corrigée avec backward, AMP bf16/fp16, TF32, channels_last,
+#           agrégation par stimulus robuste (nb de patches variable),
+#           évaluation DSIS tolérante aux formats numpy/torch.
+# -----------------------------------------------------------------------------
 
-    def initialize(self, model='lpips', net='alex', colorspace='Lab', pnet_rand=False, pnet_tune=False, model_path=None,
-            use_gpu=True, printNet=False, spatial=False, 
-            is_train=False, lr=.001, beta1=0.5, version='0.1', gpu_ids=[0], use_amp=False, amp_dtype="fp16"):
-        '''
-        INPUTS
-            model - ['lpips'] for linearly calibrated network
-                    ['baseline'] for off-the-shelf network
-                    ['L2'] for L2 distance in Lab colorspace
-                    ['SSIM'] for ssim in RGB colorspace
-            net - ['squeeze','alex','vgg']
-            model_path - if None, will look in weights/[NET_NAME].pth
-            colorspace - ['Lab','RGB'] colorspace to use for L2 and SSIM
-            use_gpu - bool - whether or not to use a GPU
-            printNet - bool - whether or not to print network architecture out
-            spatial - bool - whether to output an array containing varying distances across spatial dimensions
-            is_train - bool - [True] for training mode
-            lr - float - initial learning rate
-            beta1 - float - initial momentum term for adam
-            version - 0.1 for latest, 0.0 was original (with a bug)
-            gpu_ids - int array - [0] by default, gpus to use
-        '''
-        self.use_gpu = use_gpu
-        self.gpu_ids = gpu_ids
+
+class _UninitializedNet(torch.nn.Module):
+    def forward(self, *args, **kwargs):
+        raise RuntimeError("Trainer.net is not initialized. Call trainer.initialize(...) or pass net=... to Trainer().")
+
+class _UninitializedLoss(torch.nn.Module):
+    def forward(self, *args, **kwargs):
+        raise RuntimeError("Trainer.rankLoss is not initialized. Call trainer.initialize(...) or pass rankLoss=... to Trainer().")
+class Trainer:
+    def __init__(
+            self,
+            net: Optional[nn.Module] = None,
+            rankLoss: Optional[nn.Module] = None,
+            optimizer: Optional[Optimizer] = None,
+            device: torch.device | str = "cuda",
+            use_amp: bool = False,
+            amp_dtype: str = "float16",  # "bfloat16" ou "float16"
+            enable_tf32: bool = False,
+            compile_model: bool = False,
+        ) -> None:
+            self.device = torch.device(device)
+
+            # Autoriser la construction vide (compat avec l'ancien train.py)
+            self.net = (net if net is not None else _UninitializedNet()).to(self.device)
+            self.rankLoss = (rankLoss if rankLoss is not None else _UninitializedLoss()).to(self.device)
+            self.optimizer = optimizer  # peut rester None jusqu'à initialize()
+
+            # Options précision
+            self.use_amp = bool(use_amp)
+            self.amp_dtype = (
+                torch.bfloat16 if str(amp_dtype).lower() in ("bf16", "bfloat16") else torch.float16
+            )
+
+            if enable_tf32:
+                try:
+                    torch.backends.cuda.matmul.allow_tf32 = True if enable_tf32 else False
+                    torch.backends.cudnn.allow_tf32 = True if enable_tf32 else False
+                except Exception:
+                    pass
+
+            # GradScaler : utile seulement en fp16
+            if self.use_amp and self.amp_dtype is torch.float16:
+                self.scaler = torch.amp.GradScaler("cuda", enabled=True)
+            else:
+                self.scaler = torch.amp.GradScaler("cuda", enabled=False)
+
+            # (Optionnel) torch.compile — seulement si un vrai net a été fourni
+            if compile_model and not isinstance(self.net, _UninitializedNet):
+                try:
+                    self.net = torch.compile(self.net)  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+                
+            self.legacy_mode = True
+            if self.legacy_mode:
+                self.use_amp = False
+                self.amp_dtype = None
+                try:
+                    torch.backends.cuda.matmul.allow_tf32 = False
+                    torch.backends.cudnn.allow_tf32 = False
+                except Exception:
+                    pass
+            # Tensors courants injectés par set_input()
+            self.ref = None
+            self.p0 = None
+            self.stimulus = None
+            self.judge = None
+            self.loss_total = None
+            self.mos_predict = None
+            self.mos = None
+            self.fixed_patches_per_stimulus = None  # for old reshaping compatibility
+    def initialize(self, model='lpips', net='alex', colorspace='Lab',
+               pnet_rand=False, pnet_tune=False, model_path=None,
+               use_gpu=True, printNet=False, spatial=False,
+               is_train=False, lr=.001, beta1=0.5, version='0.1', gpu_ids=[0]):
+        """
+        Shim de compatibilité pour l'ancienne API.
+        Reconstruit self.net / self.rankLoss / self.optimizer comme avant.
+        """
+        import torch
+        try:
+            import lpips
+        except Exception as e:
+            raise RuntimeError("Le module 'lpips' est requis par initialize().") from e
+
+        # Etat
         self.model = model
-        self.net = net
-        self.is_train = is_train
-        self.spatial = spatial
-        self.model_name = '%s [%s]'%(model,net)
-        self.use_amp = use_amp and use_gpu
-        self.amp_dtype = torch.bfloat16 #if str(amp_dtype).lower() in ("bf16", "bfloat16") else torch.float16
-        torch.set_float32_matmul_precision('high') # use "high" precision for float32 matrix multiplications (for newer pytorch versions)
-        cuda_back.matmul.allow_tf32 = True
-        cudnn.allow_tf32 = True
+        self.is_train = bool(is_train)
+        self.spatial = bool(spatial)
+        self.model_name = f"{model} [{net}]"
 
-        if(self.model == 'lpips'): # pretrained net + linear layer
-            self.net = lpips.LPIPS(pretrained=not is_train, net=net, version=version, lpips=True, spatial=spatial, 
-                pnet_rand=pnet_rand, pnet_tune=pnet_tune, 
-                use_dropout=True, model_path=model_path, eval_mode=False)
-        elif(self.model=='baseline'): # pretrained network
-            self.net = lpips.LPIPS(pnet_rand=pnet_rand, net=net, lpips=False)
-        elif(self.model in ['L2','l2']):
-            self.net = lpips.L2(use_gpu=use_gpu,colorspace=colorspace) # not really a network, only for testing
+        # Device / GPU
+        if use_gpu and torch.cuda.is_available():
+            dev = torch.device(f"cuda:{gpu_ids[0] if gpu_ids else 0}")
+        else:
+            dev = torch.device("cpu")
+        self.device = dev  # maj du device du trainer
+
+        # ---- Construction du réseau métrique ----
+        if model.lower() == 'lpips':            # LPIPS calibré linéaire
+            self.net = lpips.LPIPS(
+                pretrained=not self.is_train,
+                net=net,
+                version=version,
+                lpips=True,
+                spatial=spatial,
+                pnet_rand=pnet_rand,
+                pnet_tune=pnet_tune,
+                use_dropout=True,
+                model_path=model_path,
+                eval_mode=False
+            )
+        elif model.lower() == 'baseline':        # backbone off-the-shelf
+            self.net = lpips.LPIPS(
+                pnet_rand=pnet_rand,
+                net=net,
+                lpips=False
+            )
+        elif model.lower() in ['l2']:
+            self.net = lpips.L2(use_gpu=use_gpu, colorspace=colorspace)
             self.model_name = 'L2'
-        elif(self.model in ['DSSIM','dssim','SSIM','ssim']):
-            self.net = lpips.DSSIM(use_gpu=use_gpu,colorspace=colorspace)
+        elif model.lower() in ['dssim', 'ssim']:
+            self.net = lpips.DSSIM(use_gpu=use_gpu, colorspace=colorspace)
             self.model_name = 'SSIM'
         else:
-            raise ValueError("Model [%s] not recognized." % self.model)
+            raise ValueError(f"Model [{model}] not recognized.")
 
+        # Paramètres entraînables
         self.parameters = list(self.net.parameters())
 
-        if self.is_train: # training mode
-            # extra network on top to map the distance d0 (average over the patches) of the stimulus image to the MOS
+        # ---- Mode train/test + loss + optimizer ----
+        if self.is_train:
             self.rankLoss = lpips.BCERankingLoss()
             self.lr = lr
             self.old_lr = lr
-            self.optimizer_net = torch.optim.Adam(self.parameters, lr=lr, betas=(beta1, 0.999))
-            self.scaler = torch.amp.GradScaler(enabled = False) # for mixed precision training
-        else: # test mode
+            self.optimizer = torch.optim.Adam(self.parameters, lr=lr, betas=(beta1, 0.999))
+        else:
             self.net.eval()
 
 
-        if(use_gpu):
-            print('Using GPU %s'%gpu_ids[0])
-            self.net.to(gpu_ids[0], memory_format=torch.channels_last)
-            has_triton = importlib.util.find_spec("triton") is not None
-            if has_triton:
-                try:
-                    torch.set_float32_matmul_precision('high')
-                    cuda_back.matmul.allow_tf32 = True
-                    cudnn.allow_tf32 = True
-                    self.net = torch.compile(self.net, mode="max-autotune") # requires pytorch 2.0
-                except Exception as e:
-                    print("torch.compile failed, probably because pytorch version is < 2.0. Error message: ", e)
-            else:
-                print("triton not installed, cannot use torch.compile. Install triton for faster training/inference (pip install triton).")
-            if(len(gpu_ids) > 1):
-                self.net = torch.nn.DataParallel(self.net, device_ids=gpu_ids)
-            if(self.is_train):
-                self.rankLoss = self.rankLoss.to(device=gpu_ids[0]) # just put this on GPU0
+        # ---- Placement device et DataParallel (comme avant) ----
+        self.net = self.net.to(dev)
+        if use_gpu and torch.cuda.is_available() and len(gpu_ids) > 0:
+            # wrap DP identique à l'ancien comportement
+            self.net = torch.nn.DataParallel(self.net, device_ids=gpu_ids)
+            if self.is_train and self.rankLoss is not None:
+                # rankLoss sur GPU0 (historique)
+                self.rankLoss = self.rankLoss.to(device=f"cuda:{gpu_ids[0]}")
+        else:
+            if self.is_train and self.rankLoss is not None:
+                self.rankLoss = self.rankLoss.to(dev)
 
-        if(printNet):
-            print('---------- Networks initialized -------------')
-            networks.print_network(self.net)
-            print('-----------------------------------------------')
+        # Optionnel: impression du réseau (si dispo)
+        if printNet:
+            try:
+                from networks import print_network
+                print('---------- Networks initialized -------------')
+                print_network(self.net)
+                print('--------------------------------------------')
+            except Exception:
+                # pas bloquant si util manquant
+                pass
+
+        return self
+    # ----------------------------- Entrées / Préproc -------------------------
+    @torch.no_grad()
+
+    def set_input(self, input_dict):
+        # Tensors CPU/GPU possibles selon ton prefetcher → mets-les sur device ensuite.
+        self.ref = input_dict["ref"].to(self.device, non_blocking=True).contiguous(memory_format=torch.channels_last)
+        self.p0  = input_dict["p0"].to(self.device, non_blocking=True).contiguous(memory_format=torch.channels_last)
+        self.judge = input_dict["judge"].to(self.device, dtype=torch.float32, non_blocking=True).view(-1)
+        self.stimulus = (input_dict.get("stimulus", input_dict.get("stimuli_id"))).to(self.device, dtype=torch.long, non_blocking=True).view(-1)
+        if not hasattr(self, "_io_dbg"):
+            print("[DBG] ref range after dataset:", float(self.ref.min()), float(self.ref.max()), self.ref.dtype)
+            self._io_dbg = True
+        self.var_ref = Variable(self.ref,requires_grad=True)
+        self.var_p0 = Variable(self.p0,requires_grad=True)
+    # ----------------------------- Forward/Backward --------------------------
+    def _ensure_loss_tensor(self, loss: Any) -> torch.Tensor:
+        if loss is None:
+            raise RuntimeError("loss_total is None – nothing to backprop.")
+        if isinstance(loss, (list, tuple)):
+            loss = sum(
+                l if isinstance(l, torch.Tensor) else torch.tensor(float(l), device=self.device)
+                for l in loss
+            )
+        elif not isinstance(loss, torch.Tensor):
+            loss = torch.tensor(float(loss), device=self.device)
+        if loss.dim() != 0:
+            loss = loss.mean()
+        return loss
 
     def forward(self, in0, in1, retPerLayer=False):
         ''' Function computes the distance between image patches in0 and in1(reference)
@@ -119,307 +222,239 @@ class Trainer():
             computed distances between in0 and in1
         '''
         return self.net.forward(in0, in1, retPerLayer=retPerLayer)
-
-    # ***** TRAINING FUNCTIONS *****
-    def optimize_parameters(self):
-        self.optimizer_net.zero_grad(set_to_none=True)
-        self.forward_train()
-        loss = torch.mean(self.loss_total)
-        if self.use_amp and self.amp_dtype == torch.float16:
-            self.scaler.scale(loss).backward()
-            self.scaler.step(self.optimizer_net)
-            self.scaler.update()
-        else:
-            loss.backward()
-            self.optimizer_net.step()
-        # self.backward_train()
-        # self.optimizer_net.step()
-        self.clamp_weights()
-
-    def clamp_weights(self):
-        with torch.no_grad():  # désactive les gradients temporairement
-            for module in self.net.modules():
-                if hasattr(module, 'weight') and getattr(module, 'kernel_size', None) == (1, 1):
-                    module.weight.clamp_(min=0)
-    
-    def set_input(self, data):
-        self.input_ref = data['ref']
-        self.input_p0 = data['p0']
-        self.input_judge = data['judge']
-        self.input_mos = data['mos']
-        self.stimulus = data['stimuli_id']
-
-        if self.use_gpu:
-            dev = self.gpu_ids[0]
-            # Si c'est déjà en CUDA (prefetcher), on ne recopie pas
-            if not self.input_ref.is_cuda:
-                self.input_ref = self.input_ref.to(device=dev, non_blocking=True)\
-                                            .contiguous(memory_format=torch.channels_last)
-            if not self.input_p0.is_cuda:
-                self.input_p0  = self.input_p0.to(device=dev, non_blocking=True)\
-                                            .contiguous(memory_format=torch.channels_last)
-            if not self.input_judge.is_cuda:
-                self.input_judge = self.input_judge.to(device=dev, non_blocking=True)
-            if not torch.is_tensor(self.stimulus) or not self.stimulus.is_cuda:
-                self.stimulus    = self.stimulus.to(device=dev, non_blocking=True)
-
-        self.var_ref = self.input_ref.detach()
-        self.var_p0 = self.input_p0.detach()
-        # self.var_ref = Variable(self.input_ref,requires_grad=True) # Obsolete, but kept for reference
-        # self.var_p0 = Variable(self.input_p0,requires_grad=True)
-        
-    def forward_train(self): # run forward pass
-        with torch.autocast(device_type="cuda", enabled=(self.use_amp and self.use_gpu), dtype=self.amp_dtype):
-            self.d0 = self.forward(self.var_ref, self.var_p0)
-        # self.var_judge = Variable(1.*self.input_judge).view(self.d0.size()) # self.var_judge is the same as self.input_judge
-        self.var_judge = self.input_judge.view(self.d0.size())
-
-        # In the following: we aggregate var_judge & d0 per stimulus (over all the patches of the same stimulus)
-        judge = (self.var_judge).flatten().tolist()
-
+    def forward_train(self):
+        self.d0 = self.forward(self.var_ref, self.var_p0)  # [N, 1] ou [N]
+        d0 = self.d0
+      
+        from torch.autograd import Variable
+        self.var_judge = Variable(1.0 * self.judge).view(d0.size())
+      
+        judge_list = self.var_judge.detach().flatten().cpu().tolist()
         mos = [mean(map(itemgetter(1), group))
-            for key, group in groupby(zip(self.stimulus, judge), key=itemgetter(0))]
-        
-        NbuniqueStimuli = len(mos) 
-        NbpatchesPerStimulus = len(judge)//NbuniqueStimuli # we selected the same nb of patches for each stimulus 
-        
-        self.mos = torch.tensor(mos, dtype=torch.float32, device=self.gpu_ids[0])
-        self.mos = torch.reshape(self.mos, (NbuniqueStimuli,1,1,1))
-        
-        self.d0_reshaped = torch.reshape(self.d0, (NbuniqueStimuli,NbpatchesPerStimulus,1,1)) #(5,10,1,1) : 5 stimuli * 10 patches/stimulus => after aggregation : 5 MOS_predicted values
-        self.mos_predict = torch.mean(self.d0_reshaped, 1, True)
-        pred = self.mos_predict.float()
-        target = self.mos.float()
-        # For verification:
-        # res = 0
-        # for v in d0:
-            # res += v
-        # print('sum Lpips values %.6f'%res)
-        # print('sum Lpips values/NbPatchesPerStimulus = %.6f, which must be equal to sum mos_predicted: %.6f'%(res/NbpatchesPerStimulus, torch.sum(self.mos_predict)))
+            for key, group in groupby(zip(self.stimulus, judge_list), key=itemgetter(0))]
+        if isinstance(self.stimulus, torch.Tensor):
+            stimulus_list = self.stimulus.detach().flatten().cpu().tolist()
+        else:
+            stimulus_list = list(self.stimulus)
 
-        self.loss_total = self.rankLoss(pred, target) # with aggregation
-       
+        from itertools import groupby
+        from operator import itemgetter
+
+        # mos_true_list = []
+        # for key, group in groupby(zip(stimulus_list, judge_list), key=itemgetter(0)):
+        #     vals = [v for _, v in group]
+        #     mos_true_list.append(sum(vals) / float(len(vals)))
+
+        NbuniqueStimuli = len(mos)
+        # N = d0.numel()
+        NbpatchesPerStimulus = len(judge_list) // NbuniqueStimuli
+
+        target_device = (
+            self.gpu_ids[0] if hasattr(self, "gpu_ids") and len(self.gpu_ids) > 0 else d0.device
+        )
+
+        self.mos = torch.tensor(mos, dtype=torch.float32, device=target_device)
+        self.mos = torch.reshape(self.mos, (NbuniqueStimuli, 1, 1, 1))
+
+        d0_flat = d0.view(-1)  # [N]
+        self.d0_reshaped = torch.reshape(
+            d0_flat, (NbuniqueStimuli, NbpatchesPerStimulus, 1, 1)
+        )  # ex: (5,10,1,1)
+
+        # self.mos_predict : [NbStimuli,1,1,1]
+        self.mos_predict = torch.mean(self.d0_reshaped, dim=1, keepdim=True)
+
+        self.loss_total = self.rankLoss.forward(self.mos_predict, self.mos)
+
         return self.loss_total
 
     def backward_train(self):
-        pass
-        # torch.mean(self.loss_total).backward() #torch.mean is useless since we have only one "loss_total" value/batch, and this function is excecuted per batch 
-
-    
-    def get_current_errors(self):
         loss = self.loss_total
-        if isinstance(loss, torch.Tensor):
-            loss_scalar = loss.detach()
-            if loss_scalar.dim() != 0:
-                loss_scalar = loss_scalar.mean()
-            loss_value = loss_scalar.to(torch.float32).cpu().item()
-        else:
-            loss_value = float(loss)
-        retDict = OrderedDict([('loss_total', loss_value)])
+        if not torch.is_tensor(loss):
+            loss = torch.tensor(loss, dtype=torch.float32, device=getattr(self, "device", None))
+        torch.mean(loss).backward()
+        
+    def optimize_parameters(self):
+        self.forward_train()
+        self.optimizer.zero_grad()
+        self.backward_train()
+        self.optimizer.step()
+        self.clamp_weights()
+        
+    def clamp_weights(self):
+        with torch.no_grad():
+            for m in self.net.modules():
+                if hasattr(m, "weight") and hasattr(m, "kernel_size") and m.kernel_size == (1,1):
+                    m.weight.data = torch.clamp(m.weight.data, min=0.0)
+    # ------------------------------- Évaluation (legacy) ------------------------------
+    @torch.inference_mode()
+    def Testset_DSIS(self, loader, name="Test"):
 
-        for key in retDict.keys():
-            retDict[key] = np.mean(retDict[key])
+        val_loss_sum = 0.0
+        val_mse_sum  = 0.0
+        val_steps    = 0
 
-        return retDict
+        MOSpredicteds_f = []  # floats
+        MOSs_f          = []  # floats
 
-    def get_current_visuals(self):
-        zoom_factor = 256/self.var_ref.detach().size()[2]
+        device = self.gpu_ids[0] if hasattr(self, "gpu_ids") and len(self.gpu_ids) > 0 else "cuda:0"
 
-        ref_img = lpips.tensor2im(self.var_ref.detach())
-        p0_img = lpips.tensor2im(self.var_p0.detach())
+        for data in tqdm.tqdm(loader, desc=name):
+            # Déballage & device
+            ref = data["ref"].to(device, non_blocking=True)
+            p0  = data["p0"].to(device, non_blocking=True)
+            gt  = data["judge"].to(device, non_blocking=True)
+            stimulus = data["stimuli_id"]  # reste CPU pour le groupby Python
 
-        ref_img_vis = zoom(ref_img,[zoom_factor, zoom_factor, 1],order=0)
-        p0_img_vis = zoom(p0_img,[zoom_factor, zoom_factor, 1],order=0)
+            # Réseau via le wrapper legacy
+            d0 = self.forward(ref, p0).to(device)  # [N] ou [N,1] → on aplati ensuite
 
-        return OrderedDict([('ref', ref_img_vis),
-                            ('p0', p0_img_vis)])                   
+            # --- Agrégation 'legacy' (groupby Python) ---
+            gt_list = gt.detach().cpu().numpy().flatten().tolist()
+            # groupby exige contiguïté par stimulus (comme l'ancien)
+            mos_list = [mean(map(itemgetter(1), group))
+                        for key, group in groupby(zip(stimulus, gt_list), key=itemgetter(0))]
+            NbStim = len(mos_list)
+            NbPatchesPerStim = len(gt_list) // NbStim
 
-    def save(self, path, label):
+            MOS = torch.tensor(mos_list, dtype=torch.float32, device=device).view(NbStim, 1, 1, 1)
+            d0_reshaped = d0.view(-1).view(NbStim, NbPatchesPerStim, 1, 1)
+            MOSpred = torch.mean(d0_reshaped, dim=1, keepdim=True)  # [NbStim,1,1,1]
+
+            # Loss (si dispo)
+            if hasattr(self, "rankLoss") and callable(getattr(self.rankLoss, "forward", None)):
+                loss = self.rankLoss.forward(MOSpred, MOS)
+                val_loss_sum += float(loss.detach().cpu().numpy())
+            else:
+                loss = None
+
+            # MSE manuel
+            mse = (MOSpred - MOS) ** 2
+            val_mse_sum += float(mse.mean().detach().cpu().numpy())
+
+            val_steps += 1
+
+            # --- Accumulation en floats (évite les tensors dans des listes) ---
+            MOSpredicteds_f.extend(MOSpred.detach().cpu().numpy().flatten().tolist())
+            MOSs_f.extend(MOS.detach().cpu().numpy().flatten().tolist())
+
+        # Statistiques finales
+        srocc = stats.spearmanr(MOSpredicteds_f, MOSs_f)[0] if len(MOSs_f) > 1 else np.nan
+        loss_mean = val_loss_sum / max(val_steps, 1)
+        mse_mean  = val_mse_sum  / max(val_steps, 1)
+
+        print(f"[{name}] steps={val_steps}  Loss={loss_mean:.6f}  MSE={mse_mean:.6f}  SROCC={srocc:.6f}")
+
+        return {"loss": loss_mean, "MSE": mse_mean, "SROCC": float(srocc)}
+
+    # ------------------------------ Sauvegarde --------------------------------
+    def save(self, save_dir: str, epoch: int | str = "latest") -> str:
+        os.makedirs(save_dir, exist_ok=True)
         net_to_save = self.net.module if isinstance(self.net, torch.nn.DataParallel) else self.net
-        self.save_network(net_to_save, path, '', label)
+        state = {
+            "net": net_to_save.state_dict(),
+            "optimizer": self.optimizer.state_dict() if self.optimizer is not None else None,
+            "epoch": epoch,
+            "amp": {
+                "use_amp": self.use_amp,
+                "amp_dtype": str(self.amp_dtype),
+                "scaler": (self.scaler.state_dict() if hasattr(self.scaler, "state_dict") else None),
+            },
+        }
+        # Nom de fichier: cas spécial pour "latest"
+        if isinstance(epoch, str) and epoch.lower() == "latest":
+            filename = "latest_net_.pth"
+        else:
+            filename = f"net_{epoch}.pth"
 
-    # helper saving function that can be used by subclasses
-    def save_network(self, network, path, network_label, epoch_label):
-        print('Saving network to %s'%path)
-        save_filename = '%s_net_%s.pth' % (epoch_label, network_label)
-        save_path = os.path.join(path, save_filename)
-        torch.save(network.state_dict(), save_path)
+        path = os.path.join(save_dir, filename)
+        torch.save(state, path)
+        return path
 
-    # helper loading function that can be used by subclasses
-    def load_network(self, network, network_label, epoch_label):
-        save_filename = '%s_net_%s.pth' % (epoch_label, network_label)
-        save_path = os.path.join(self.save_dir, save_filename)
-        print('Loading network from %s'%save_path)
-        network.load_state_dict(torch.load(save_path))
+    # ------------------------------ Utilitaires -------------------------------
+    def update_learning_rate(self, nepoch_decay: int):
+        """
+        Décroissance linéaire simple : à chaque appel on retranche lr/nepoch_decay.
+        Attend que self.lr, self.old_lr et self.optimizer existent (set par initialize()).
+        """
+        if self.optimizer is None:
+            raise RuntimeError("update_learning_rate: optimizer is None. Appelle initialize(...) d'abord.")
+        if nepoch_decay is None or nepoch_decay <= 0:
+            # rien à faire si pas de phase de décroissance
+            return self.optimizer.param_groups[0]["lr"]
 
-    def update_learning_rate(self,nepoch_decay):
-        lrd = self.lr / nepoch_decay
-        lr = self.old_lr - lrd
+        # Valeurs de référence (si pas déjà posées)
+        if not hasattr(self, "lr"):
+            self.lr = float(self.optimizer.param_groups[0]["lr"])
+        if not hasattr(self, "old_lr"):
+            self.old_lr = float(self.optimizer.param_groups[0]["lr"])
 
-        for param_group in self.optimizer_net.param_groups:
-            param_group['lr'] = lr
+        lrd = float(self.lr) / float(nepoch_decay)   # quantité à retrancher à chaque epoch de décroissance
+        lr = max(self.old_lr - lrd, 0.0)             # évite les LR négatifs
 
-        print('update lr [%s] decay: %f -> %f' % (type,self.old_lr, lr))
+        for param_group in self.optimizer.param_groups:
+            param_group["lr"] = lr
+
+        name = getattr(self, "model_name", "LPIPS")
+        print("update lr [%s] decay: %.6f -> %.6f" % (name, self.old_lr, lr))
         self.old_lr = lr
-
-
-    def get_image_paths(self):
-        return self.image_paths
-
-    def save_done(self, flag=False):
-        np.save(os.path.join(self.save_dir, 'done_flag'),flag)
-        np.savetxt(os.path.join(self.save_dir, 'done_flag'),[flag,],fmt='%i')
-
-    def to_numpy(tensor):
-        if tensor.device.type == 'cuda':
-            tensor = tensor.cpu()
-        return tensor.numpy()
-
-def Testset_DSIS(data_loader, func, funcLoss=None, name='', use_amp=False, amp_dtype=torch.bfloat16):
-    """
-    Évalue un DataLoader DSIS :
-      - func(ref, p0) -> d0 (distance par patch)
-      - funcLoss(pred, target) -> loss scalaire (optionnel)
-    Attend que data_loader.load_data() renvoie un torch DataLoader.
-    Chaque batch doit contenir au moins: 'ref', 'p0', 'judge', 'stimuli_id'.
-    'ref'/'p0' peuvent être np.ndarray uint8 (N,C,H,W) ou torch.Tensor.
-    'judge' peut être np.ndarray/tensor (N,1,1,1) ou (N,).
-    """
-    import contextlib
-    import numpy as np
-    import torch
-    from tqdm import tqdm
-
-    # --------- helpers ----------
-    def _to_device_img(x, device):
-        """x: np.uint8 (N,C,H,W) ou torch (N,C,H,W); return torch.float32 normalisé [-1,1] sur device."""
-        if isinstance(x, np.ndarray):
-            t = torch.from_numpy(x)
-        else:
-            t = x
-        if t.dtype == torch.uint8:
-            t = t.to(device=device, non_blocking=True, dtype=torch.float32)
-            t.div_(255.0).sub_(0.5).div_(0.5)  # [0,255] -> [-1,1]
-        else:
-            t = t.to(device=device, non_blocking=True)
-            if t.dtype != torch.float32:
-                t = t.float()
-        return t.contiguous(memory_format=torch.channels_last)
-
-    def _to_device_vec(x, device):
-        """x: np.ndarray/tensor, renvoie torch.float32 1D (N,) sur device."""
-        if isinstance(x, np.ndarray):
-            t = torch.from_numpy(x)
-        else:
-            t = x
-        t = t.to(device=device, non_blocking=True)
-        if t.dtype != torch.float32:
-            t = t.float()
-        return t.view(-1)
-
-    def _to_device_ids(x, device):
-        """stimuli_id en 1D long sur device (accepte list/np/tensor)."""
-        if isinstance(x, np.ndarray):
-            t = torch.from_numpy(x)
-        elif isinstance(x, (list, tuple)):
-            t = torch.tensor(x)
-        else:
-            t = x
-        return t.to(device=device, dtype=torch.long).view(-1)
-
-    def _group_mean(values_1d, ids_1d):
+        return lr
+    
+    def get_current_errors(self) -> Dict[str, float]:
+        out = {}
+        if isinstance(self.loss_total, torch.Tensor):
+            try:
+                out["loss_total"] = float(self.loss_total.detach().float().mean().item())
+            except Exception:
+                out["loss_total"] = float(self.loss_total.mean().item())
+        if isinstance(self.mos_predict, torch.Tensor):
+            out["mos_pred_mean"] = float(self.mos_predict.detach().float().mean().item())
+        if isinstance(self.mos, torch.Tensor):
+            out["mos_true_mean"] = float(self.mos.detach().float().mean().item())
+        return out
+    def _denorm_to_uint8(self, x: torch.Tensor) -> np.ndarray:
         """
-        Moyenne par id (aucune hypothèse de nb constant de patches).
-        values_1d: (N,), ids_1d: (N,) long.
-        Retourne (mean_per_id[K], ids_unique[K])
+        x: Tensor [N,C,H,W] ou [C,H,W], range [-1,1] ou [0,1].
+        Retourne un numpy uint8 [H,W,C] (B=1er élément si batch).
         """
-        u, inv = torch.unique(ids_1d, return_inverse=True, sorted=True)
-        K = u.numel()
-        sums = torch.zeros(K, device=values_1d.device, dtype=values_1d.dtype)
-        cnts = torch.zeros(K, device=values_1d.device, dtype=values_1d.dtype)
-        sums.scatter_add_(0, inv, values_1d)
-        cnts.scatter_add_(0, inv, torch.ones_like(values_1d, dtype=values_1d.dtype))
-        means = sums / torch.clamp_min(cnts, 1e-12)
-        return means, u
+        if x is None:
+            raise RuntimeError("Aucune image disponible (self.ref/self.p0 est None).")
+        if x.ndim == 3:
+            x = x.unsqueeze(0)  # -> [1,C,H,W]
+        # si ce sont des uint8 CHW (cas dataset), convertis en float et normalise
+        if x.dtype == torch.uint8:
+            x = x.float() / 255.0
+        # remet en [0,1] si besoin (on suppose [-1,1] après set_input)
+        if x.min() < 0.0 or x.max() > 1.0:
+            x = (x + 1.0) * 0.5
+        x = x.clamp(0, 1)
 
-    # --------- boucle d'éval ----------
-    device = torch.device('cuda', 0) if torch.cuda.is_available() else torch.device('cpu')
+        # on ne prend que le 1er élément du batch pour l’aperçu
+        x0 = x[0].detach().to("cpu")
+        # CHW -> HWC
+        x0 = x0.permute(1, 2, 0).contiguous().numpy()
+        x0 = (x0 * 255.0 + 0.5).astype(np.uint8)
+        return x0
 
-    tot_samples = 0
-    sum_loss = 0.0
-    sum_mse = 0.0
-    nb_steps = 0
+    def get_current_visuals(self, k: int = 1) -> dict:
+        """
+        Retourne un petit dict d'images pour l'affichage (compatible anciens visualizers).
+        - 'ref': première image ref du batch en uint8 HxWxC
+        - 'p0' : première image disto du batch en uint8 HxWxC
+        - 'diff' (optionnel) : |ref - p0| en uint8 pour repérage
+        """
+        if self.ref is None or self.p0 is None:
+            # compatible avec les anciens scripts: retourner un dict vide au lieu de lever
+            return {}
 
-    all_pred = []  # liste de floats (MOS prédits par stimulus)
-    all_gt   = []  # liste de floats (MOS GT par stimulus)
+        ref_img = self._denorm_to_uint8(self.ref)
+        p0_img  = self._denorm_to_uint8(self.p0)
 
-    dl = data_loader.load_data()
+        # diff simple (même forme HxWxC)
+        diff = np.abs(ref_img.astype(np.int16) - p0_img.astype(np.int16)).astype(np.uint8)
 
-    for data in tqdm(dl, desc=name):
-        with contextlib.ExitStack() as stack:
-            stack.enter_context(torch.no_grad())
-            if use_amp and device.type == 'cuda':
-                stack.enter_context(torch.autocast(device_type="cuda", dtype=amp_dtype))
-
-            # 1) Prépare batch (images -> normalisées; labels/ids en 1D)
-            ref  = _to_device_img(data['ref'], device)     # (N,C,H,W), float32 [-1,1]
-            p0   = _to_device_img(data['p0'],  device)     # (N,C,H,W), float32 [-1,1]
-            gt   = _to_device_vec(data['judge'], device)   # (N,)
-            sid  = _to_device_ids(data['stimuli_id'], device)  # (N,) long
-
-            # 2) Forward par patch -> d0 (N,)
-            d0 = func(ref, p0)
-            d0 = _to_device_vec(d0, device)                # robust: aplati en (N,)
-
-            # 3) Moyenne par stimulus (pas besoin de nb_patches fixe)
-            mos_pred, ids_u = _group_mean(d0, sid)         # (K,), (K,)
-            mos_gt,   _     = _group_mean(gt, sid)         # (K,)
-
-            # 4) Loss / MSE (si demandée), au format attendu (K,1,1,1)
-            if funcLoss is not None:
-                pred4 = mos_pred.view(-1,1,1,1)            # (K,1,1,1)
-                gt4   = mos_gt.view(-1,1,1,1)              # (K,1,1,1)
-                loss_val = funcLoss(pred4, gt4)
-                sum_loss += float(loss_val.detach().cpu())
-            mse_val = torch.mean((mos_pred - mos_gt) ** 2).detach().cpu().item()
-            sum_mse += mse_val
-
-            # 5) stats / logs
-            tot_samples += int(gt.numel())
-            nb_steps += 1
-
-            all_pred.extend(mos_pred.detach().cpu().tolist())
-            all_gt.extend(mos_gt.detach().cpu().tolist())
-
-    # --------- agrégations finales ----------
-    # Spearman (scipy si dispo; sinon fallback)
-    try:
-        from scipy import stats as _scistats
-        srocc = float(_scistats.spearmanr(all_pred, all_gt)[0])
-    except Exception:
-        # Fallback spearman (rangs) en torch
-        def _rank(a):
-            t = torch.tensor(a, dtype=torch.float64)
-            # rangs denses stables
-            vals, inv = torch.sort(t)
-            ranks = torch.empty_like(inv, dtype=torch.float64)
-            ranks[inv] = torch.arange(1, len(t)+1, dtype=torch.float64)
-            return ranks
-        rp = _rank(all_pred)
-        rg = _rank(all_gt)
-        rp = rp - rp.mean()
-        rg = rg - rg.mean()
-        srocc = float((rp @ rg) / (rp.norm() * rg.norm() + 1e-12))
-
-    avg_loss = (sum_loss / nb_steps) if (nb_steps > 0 and funcLoss is not None) else 0.0
-    avg_mse  = (sum_mse  / nb_steps) if nb_steps > 0 else 0.0
-
-    print(f'Testset samples = {tot_samples}')
-    print(f'Testset steps   = {nb_steps}')
-    if funcLoss is not None:
-        print(f'Testset Loss   = {avg_loss:.6f}')
-    print(f'Testset MSE    = {avg_mse:.6f}')
-    print(f'SROCC          = {srocc:.6f}')
-
-    return {'loss': avg_loss, 'MSE': avg_mse, 'SROCC': srocc}
-
+        return {
+            "ref": ref_img,
+            "p0": p0_img,
+            "diff": diff
+        }

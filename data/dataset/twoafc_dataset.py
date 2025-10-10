@@ -347,7 +347,8 @@ import os, shutil, time, hashlib, threading
 import csv
 import random
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
+import torchvision.transforms as T
 import cv2
 import torch
 from torch.utils.data import Dataset
@@ -357,44 +358,39 @@ from collections import OrderedDict
 from typing import Optional
 import re
 
-_img_cache = OrderedDict()
-_img_cache_bytes = 0
-_IMG_CACHE_LIMIT = 256 * 1024**2   # ~256 Mo 
-_img_cache_lock = threading.Lock()
-_COPY_SEM = threading.Semaphore(2) # 2 copies simultanées max
+
+_COPY_SEM = threading.Semaphore(6) # 2 copies simultanées max
 cv2.setNumThreads(0) # Avoid overthreading from open-cv
 
-def imread_cached_bgr(path: str):
-    global _img_cache, _img_cache_bytes
-    # If RAM limit exceeded, use cv2.imread directly (no cache)
-    if _IMG_CACHE_LIMIT <= 0:
-        img = cv2.imread(path, cv2.IMREAD_COLOR)  # BGR uint8
-        if img is None:
-            raise RuntimeError(f"Image not found : {path}")
-        return img
-    # Try to get from cache
-    with _img_cache_lock:
-        arr = _img_cache.get(path)
-        if arr is not None:
-            _img_cache.move_to_end(path)
-            return arr
-    try:
-        buf = np.fromfile(path, dtype=np.uint8)           # Windows-safe (pas de handle persistant)
-        img = cv2.imdecode(buf, cv2.IMREAD_COLOR)   
-    except Exception as e:
-        # Fallback if missing memory (ArrayMemoryError) or decode error
-        img = cv2.imread(path, cv2.IMREAD_COLOR)  # BGR uint8
-    if img is None:
-        raise RuntimeError(f"Image introuvable : {path}")
-    sz = img.nbytes
-    with _img_cache_lock:
-        _img_cache[path] = img
-        _img_cache_bytes += sz
-        while _img_cache_bytes > _IMG_CACHE_LIMIT and _img_cache:
-            _, old = _img_cache.popitem(last=False)
-            _img_cache_bytes -= old.nbytes
-    return img
+_to_tensor_01 = T.ToTensor()
+_norm_m11 = T.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
 
+def pil_to_tensor_m11(img: Image.Image):
+    # img est déjà en RGB (grâce à imread_cached_bgr → PIL.convert("RGB"))
+    return _norm_m11(_to_tensor_01(img))
+def imread_cached_rgb(path: str, use_cache: bool = True):
+    """
+    Legacy-like : lecture simple en RGB via PIL, sans cache ni conversion BGR.
+    """
+    if path is None or not os.path.exists(path):
+        return None
+    try:
+        return Image.open(path).convert("RGB")
+    except Exception:
+        return None
+def pil_crop_safe(img: Image.Image, x: int, y: int, size: int) -> Image.Image:
+    # Si le patch dépasse, on pad en noir (comme l’ancien comportement implicite avec PNG pré-découpés)
+    w, h = img.size
+    if x < 0 or y < 0 or x + size > w or y + size > h:
+        pad_left   = max(0, -x)
+        pad_top    = max(0, -y)
+        pad_right  = max(0, x + size - w)
+        pad_bottom = max(0, y + size - h)
+        if pad_left or pad_top or pad_right or pad_bottom:
+            img = ImageOps.expand(img, border=(pad_left, pad_top, pad_right, pad_bottom), fill=0)
+            x += pad_left
+            y += pad_top
+    return img.crop((x, y, x + size, y + size))
 def pick_view_path(base_folder: str, view_idx: int, ext: str = "auto") -> Optional[str]:
     """Retourne le chemin d'une vue existante (view_{i}.ext). Si ext='auto', essaie png/jpg/jpeg."""
     candidates = [ext] if ext != "auto" else ["png", "jpg", "jpeg"]
@@ -473,16 +469,16 @@ def ensure_on_ssd(src_path: str, src_root: Optional[str], cache_root: Optional[s
     return str(src)
 
 class TwoAFCDataset(Dataset):
-    def __init__(self, dataroots, load_size=64, Trainset=False, maxNbPatches=205, 
+    def __init__(self, dataroots, load_size=64, Trainset=False, maxNbPatches=150, 
                  root_refPatches=None, root_distPatches=None, src_root=None, target=None, img_ext='auto',
-                 cache_root: Optional[str] = r'C:\Graphics_LPIPS\cache', ram_cache_limit_mb: int = 256):
+                 cache_root: Optional[str] = r'C:\Graphics_LPIPS\cache'):
         self.target = target
         self.patch_entries = []
-        # self.transform = transforms.Compose([
-        #     transforms.Resize(load_size),
-        #     transforms.ToTensor(),
-        #     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-        # ])
+        self.transform = transforms.Compose([
+            transforms.Resize(load_size),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)) # -> [-1, 1]
+        ])
 
         # Racines des répertoires
         self.cache_root = cache_root #r'C:\Graphics_LPIPS\cache'
@@ -493,14 +489,16 @@ class TwoAFCDataset(Dataset):
         root_judges = r'D:\These\Graphics-LPIPS\dataset\judge_trainingset' if Trainset else r'D:\These\Graphics-LPIPS\dataset\judge_testset'
         # Limit of RAM cache for images per worker
         # SET ram_cache_limit_mb to 0 to disable RAM cache and use cv2.imread directly
-        global _IMG_CACHE_LIMIT
-        try: 
-            _IMG_CACHE_LIMIT = int(ram_cache_limit_mb) * 1024**2
-        except Exception:
-            _IMG_CACHE_LIMIT = 256 * 1024**2
-
+        self._ssd_map = {}  # src_path -> ssd_path
+        self._pil_cache = {}  # path -> PIL.Image
+        self._judge_cache = {}
+        
+        if not isinstance(dataroots, list):
+            dataroots = [dataroots]
+        
         if Trainset:
             shuffled_inputfile = []
+            print("SHUFFLINGGGGGGGGGGGG!!!")
             for idx, datafile in enumerate(dataroots):
                 out_path = f'D:\\These\\Graphics-LPIPS\\dataset\\Trainset_shuffled_{idx+1}.csv'
                 with open(datafile, 'r') as r, open(out_path, 'w') as w:
@@ -510,9 +508,6 @@ class TwoAFCDataset(Dataset):
                     w.write(header + ''.join(rows))
                 shuffled_inputfile.append(out_path)
             dataroots = shuffled_inputfile
-
-        if not isinstance(dataroots, list):
-            dataroots = [dataroots]
 
         stimuli_id = 0
         for csv_file_path in dataroots:
@@ -538,9 +533,11 @@ class TwoAFCDataset(Dataset):
 
                     nb_patches_total = sum(nb_patches_per_view)
 
-                    nb_full = maxNbPatches // nb_patches_total if nb_patches_total < maxNbPatches else 1 
-                    nb_rand = maxNbPatches % nb_patches_total if nb_patches_total < maxNbPatches else 0
-                    # Like this it's minimum one full set of patches
+                    nb_full = maxNbPatches // nb_patches_total  
+                    nb_rand = maxNbPatches % nb_patches_total 
+
+                    # print('Nbfull IMAGE %.1f'%nb_full)
+                    # print('NbRandom patches %.1f'%nb_rand)
                     for _ in range(nb_full):
                         view_counter = 1
                         patch_seen = 0
@@ -584,43 +581,67 @@ class TwoAFCDataset(Dataset):
                     stimuli_id += 1
 
     
-    def __getitem__(self, index):
-        entry = self.patch_entries[index]
+    def __getitem__(self, idx):
+        entry = self.patch_entries[idx]
+        ref_src = entry['ref_path']
+        dis_src = entry['dis_path']
+        x, y = int(entry['x']), int(entry['y'])
+        size = int(entry['patch_size'])
             
-        def load_patch(path, x, y, size):
-            """Retourne un patch image **NumPy uint8** en format HWC (RGB)."""
-            img_path = ensure_on_ssd(path, self.src_root, self.cache_root)
-            # Utilise la version avec cache RAM si dispo
-            img_bgr = imread_cached_bgr(img_path)   # np.uint8, HWC (BGR)
-            if img_bgr is None:
-                raise RuntimeError(f"Image not found : {path}")
-            patch_bgr = img_bgr[y:y+size, x:x+size]
-            if patch_bgr.shape[0] != size or patch_bgr.shape[1] != size:
-                raise ValueError(f"Patch out of bounds: img={img_bgr.shape}, x={x}, y={y}, size={size}")
-            patch_rgb = cv2.cvtColor(patch_bgr, cv2.COLOR_BGR2RGB)  # np.uint8, HWC
-            return patch_rgb.copy()  # s'assure de la contiguïté
-
-         # --- images en NumPy HWC -> CHW uint8 ---
-        ref_hwc = load_patch(entry['ref_path'], entry['x'], entry['y'], entry['patch_size'])
-        dis_hwc = load_patch(entry['dis_path'], entry['x'], entry['y'], entry['patch_size'])
-        ref_chw = np.ascontiguousarray(np.transpose(ref_hwc, (2, 0, 1)), dtype=np.uint8)
-        dis_chw = np.ascontiguousarray(np.transpose(dis_hwc, (2, 0, 1)), dtype=np.uint8)
-
-        # --- labels en float32 NumPy ---
-        try:
-            if self.target == "mos":
-                judge = np.array([[[entry['mos']]]], dtype=np.float32)  # (1,1,1)
-            else:
-                judge = np.load(entry['judge_path']).astype(np.float32).reshape(1,1,1)
-        except Exception as e:
-            raise RuntimeError(f"Error loading {entry['judge_path']}: {e}")
+        # --- SSD CACHING ---     
         
-        return {
-            'ref': ref_chw,      # np.uint8 CHW
-            'p0': dis_chw,       # np.uint8 CHW
-            'judge': judge,      # np.float32 (1,1,1)
-            'mos': np.array([[[entry['mos']]]], dtype=np.float32),
-            'stimuli_id': entry['stimuli_id']
+        ref_path = self._ssd_map.get(ref_src)
+        if ref_path is None:
+            ref_path = ensure_on_ssd(ref_src, self.src_root, self.cache_root)
+            self._ssd_map[ref_src] = ref_path
+        
+        dis_path = self._ssd_map.get(dis_src)
+        if dis_path is None:
+            dis_path = ensure_on_ssd(dis_src, self.src_root, self.cache_root)
+            self._ssd_map[dis_src] = dis_path
+        # ---  PIL/RGB  ---
+        img = self._pil_cache.get(ref_path)
+        if img is None:
+            img = imread_cached_rgb(ref_path, use_cache=False)  # your PIL RGB reader
+            self._pil_cache[ref_path] = img
+        ref_img = img
+        
+        img = self._pil_cache.get(dis_path)
+        if img is None:
+            img = imread_cached_rgb(dis_path, use_cache=False)
+            self._pil_cache[dis_path] = img
+        dis_img = img
+
+        if ref_img is None or dis_img is None:
+            raise FileNotFoundError(f"Missing image: ref={ref_path}, dis={dis_path}")
+
+        # --- CROP PIL  ---
+        ref_patch = pil_crop_safe(ref_img, x, y, size)
+        dis_patch = pil_crop_safe(dis_img, x, y, size)
+
+        # --- PIL → Tensor ∈ [-1,1] ---
+        ref_tensor = pil_to_tensor_m11(ref_patch)  # shape: [3,H,W], RGB
+        dis_tensor = pil_to_tensor_m11(dis_patch)
+        
+        jp = entry['judge_path']
+        judge = self._judge_cache.get(jp)
+        if judge is None:
+            j = np.load(jp).astype(np.float32)
+            judge = float(j) if j.ndim == 0 else j
+            self._judge_cache[jp] = judge
+
+        out = {
+            'ref': ref_tensor,
+            'p0': dis_tensor,
+            'judge': torch.tensor(judge, dtype=torch.float32),
+            'stimuli_id': torch.tensor(entry['stimuli_id'], dtype=torch.long),
+
+            # meta facultatives (si ton code en amont les loggue)
+            'ref_path': ref_path,
+            'p0_path': dis_path,
+            'x': x, 'y': y, 'patch_size': size,
+            'mos': float(entry.get('mos', 0.0)),
         }
+        return out
     def __len__(self):
         return len(self.patch_entries)

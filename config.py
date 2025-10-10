@@ -1,12 +1,12 @@
 import subprocess
 
-model = 'TMQ_NR_8VPn_fib' # 'LPIPS' or 'GraphicsLPIPS'
-testing_views = 16
-view_method = 'Fibonacci' # 'Fibonacci', 'Y_fixed_0.3' or 'Polyhedron'
-render_method = 'New_Render' # 'New_Render' or 'Old_render'
+model = 'TMQ_OR_1VP_org'#'GraphicsLPIPS_FinalNetwork'#'TMQ_OR_1VP_org' # 'LPIPS' or 'GraphicsLPIPS'
+testing_views = 1
+view_method = 'Original' # 'Fibonacci', 'Y_fixed_0.3' or 'Polyhedron'
+render_method = 'Old_Render' # 'New_Render' or 'Old_render'
 database = 'TMQ' # 'TSMD' or 'BASICS(PC)_DB' or 'TMQ'
 mos_csv_file = r'D:\These\BDD\TSMD\MOS\TSMD_MOS.csv' if database == 'TSMD' \
-    else r'D:/These/BDD/TMQ/Collected_Data/MOS+CI_3000stimuli.csv' #r'D:/These/BDD/TMQ/Collected_Data/MOS+CI_3000stimuli.csv', r'D:\These\BDD\TSMD\MOS\TSMD_MOS.csv'#r"D:\These\BDD\BASICS(PC)_DB\MOS_CI.csv" # Depends on the DATABASE used.
+    else r'D:/These/BDD/TMQ/Collected_Data/MOS+CI_3000stimuli.csv' #r'D:/These/BDD/TMQ/Collected_Data/MOS+CI_3000stimuli.csv',s r'D:\These\BDD\TSMD\MOS\TSMD_MOS.csv'#r"D:\These\BDD\BASICS(PC)_DB\MOS_CI.csv" # Depends on the DATABASE used.
 test_list_csv = r'D:\These\Graphics-LPIPS\dataset\TSMD\TSMD_20%_TestList_scaled.csv' if database == 'TSMD' \
     else r'D:\These\Graphics-LPIPS\dataset\TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv' #r'D:\These\Graphics-LPIPS\dataset\TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv', r'D:\These\Graphics-LPIPS\dataset\TSMD\TSMD_20%_TestList_scaled.csv' # We need to take the 1st column of the CSV file as the list of files.
 

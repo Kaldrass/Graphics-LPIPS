@@ -225,7 +225,10 @@ def plot_global_correlations_per_viewpoint(base_dir, vp):
 
 def calculate_correlation_all_vps_combined(base_dir, batchname, output_csv='global_combined_correlation.csv'):
     correlations = [("Object", "Pearson", "Spearman", "Slope", "CI_slope_lower", "CI_slope_upper", "Intercept", "R²")]
-    
+    def clamp01(a):
+        a = np.asarray(a, dtype=float)
+        np.clip(a, 0.0, 1.0, out=a)
+        return a
     for object_name in os.listdir(base_dir):
         object_dir = os.path.join(base_dir, object_name)
         csv_file = os.path.join(object_dir, 'GLPIPS_results_testset.csv')
@@ -241,11 +244,11 @@ def calculate_correlation_all_vps_combined(base_dir, batchname, output_csv='glob
 
             for row in reader:
                 mos = float(row[1])
-                lpips_vals = [float(x) for x in row[2:] if float(x) != 0.0]  # Exclude zero values
+                lpips_vals = [float(x) for x in row[2:]]  # Exclude zero values
                 mos_list.append(mos)
                 lpips_all_vps.append(lpips_vals)
         mos_array = np.array(mos_list)
-        lpips_array = np.array(lpips_all_vps)
+        lpips_array = clamp01(np.array(lpips_all_vps))
          
 
         #  MOS : from [1, 5] to [0, 1], where 0 = best quality

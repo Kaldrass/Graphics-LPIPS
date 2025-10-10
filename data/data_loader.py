@@ -3,11 +3,12 @@ def CreateDataLoader(
         dataroot='./dataset',
         dataset_mode='2afc', 
         trainset=False, 
-        Nbpatches= 205, load_size=64,batch_size=600,
+        Nbpatches= None, load_size=64,batch_size=None,
         serial_batches=True,
-        nThreads=30, 
-        pin_memory=True, 
-        persistent_workers=True,
+        nThreads=None, 
+        pin_memory=False, 
+        persistent_workers=False,
+        prefetch_factor=0,
         root_refPatches=None, root_distPatches=None, src_root = None, 
         target=None, 
         **dl_kwargs
@@ -39,6 +40,7 @@ def CreateDataLoader(
         root_distPatches=root_distPatches, 
         src_root=src_root, 
         target=target, 
+        prefetch_factor=prefetch_factor,
         **dl_kwargs
         )
     return data_loader

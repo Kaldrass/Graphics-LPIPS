@@ -1,5 +1,7 @@
 import torch.backends.cudnn as cudnn
-cudnn.benchmark=True
+cudnn.benchmark=False
+import torch
+# torch.set_float32_matmul_precision("high")  # OK avec TF32/bf16
 
 import numpy as np
 import time
@@ -12,7 +14,7 @@ from IPython import embed
 from Test_TestSet import Test_TestSet
 import csv
 import multiprocessing
-import torch
+
 
 
 class CUDAPrefetcher:
@@ -38,7 +40,7 @@ class CUDAPrefetcher:
                     # On "pin" pour copie H2D async
                     if t.dtype == torch.uint8 and t.dim() == 4:  # images NCHW
                         t = t.pin_memory().to(self.device, non_blocking=True).to(torch.float32)
-                        t.div_(255.0).sub_(0.5).div_(0.5)
+                        # t.div_(255.0).sub_(0.5).div_(0.5) # Normalisation is done later, not needed to do it here
                         t = t.contiguous(memory_format=torch.channels_last)
                     elif t.dtype == torch.float32:
                         t = t.pin_memory().to(self.device, non_blocking=True)
@@ -90,11 +92,11 @@ def collate_to_numpy(batch):
 
 
 os.environ['PYTHONWARNINGS'] = 'ignore'
-train_name = 'TMQ_NR_8VPn_fib'
-train_view_nbr = 8
+train_name = 'TMQ_OR_1VP_org_dbg'
+train_view_nbr = 1
 target = 'judges'#'judges'  # 'mos' or 'judges', for TMQ put judges
-view_method = 'Fibonacci' # 'Fibonacci', 'Y_fixed_0.3' or 'Polyhedron'
-render_method = 'New_Render' # 'New_Render' or 'Old_render'
+view_method = 'Original' # 'Fibonacci', 'Y_fixed_0.3', 'Polyhedron', 'Original'
+render_method = 'Old_Render' # 'New_Render' or 'Old_render'
 database = 'TMQ' # 'TSMD' or 'BASICS(PC)_DB' or 'TMQ'
 def main():
     parser = argparse.ArgumentParser()
@@ -112,7 +114,8 @@ def main():
     parser.add_argument('--use_gpu', action='store_true', help='turn on flag to use GPU', default=True)
     parser.add_argument('--gpu_ids', type=int, nargs='+', default=[0], help='gpus to use')
 
-    parser.add_argument('--nThreads', type=int, default=24, help='number of threads to use in data loader') 
+    parser.add_argument('--nThreads', type=int, default=16, help='number of threads to use in data loader') 
+    
     parser.add_argument('--nepoch', type=int, default=5, help='# epochs at base learning rate')
     parser.add_argument('--nepoch_decay', type=int, default=5, help='# additional epochs at linearly learning rate')
     parser.add_argument('--npatches', type=int, default=150, help='# randomly sampled image patches')
@@ -145,11 +148,12 @@ def main():
     trainer = lpips.Trainer()
     # trainer.initialize(model=opt.model, net=opt.net, use_gpu=opt.use_gpu, is_train=True, lr=opt.lr,
     #   pnet_rand=opt.from_scratch, pnet_tune=opt.train_trunk, gpu_ids=opt.gpu_ids)
-    trainer.initialize(model=opt.model, net=opt.net, use_gpu=True, use_amp=True, is_train=True, lr=opt.lr,
+    trainer.initialize(model=opt.model, net=opt.net, use_gpu=True, is_train=True, lr=opt.lr,
         pnet_rand=opt.from_scratch, pnet_tune=opt.train_trunk, gpu_ids=[0])
+    # trainer.set_precision_flags(use_amp=False, amp_dtype=None, enable_tf32=False)
     
     print("Model on:", next(trainer.net.parameters()).device)
-
+    # print("[AMP]", trainer.use_amp, trainer.amp_dtype)
     load_size = 64 # default value is 64
 
     visualizer = Visualizer(opt)
@@ -158,10 +162,9 @@ def main():
     # The random patches for the test set are only sampled once at the beginning of training in order to avoid noise in the validation loss.
     Testset = opt.testcsv[1 if target=='mos' else 0]
     data_loader_testSet = dl.CreateDataLoader(Testset,dataset_mode='2afc', Nbpatches= opt.npatches, 
-                                              load_size = load_size, batch_size=opt.batch_size, nThreads=opt.nThreads, # No parallelism needed for testing
-                                              pin_memory=True, persistent_workers=True, 
+                                              pin_memory=False, drop_last=False, prefetch_factor=None, nThreads=0,
                                               src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches,
-                                              target = target, ram_cache_limit_mb=0) 
+                                              target = target) 
     test_TestSet = Test_TestSet(opt)
     total_steps = 0
     # fid = open(os.path.join(opt.checkpoints_dir,opt.name,'train_log.txt'),'w+')
@@ -175,18 +178,20 @@ def main():
         print('%s: %s' % (str(k), str(v)))
     print('Total number of patches: %d, batch size: %d, input images per batch: %d' % (opt.npatches, opt.batch_size, opt.nInputImg))
     print('Total number of epochs: %d, learning rate: %.6f' % (opt.nepoch + opt.nepoch_decay, opt.lr))
-    
-    data_loader = dl.CreateDataLoader(opt.datasets[1 if target=='mos' else 0],dataset_mode='2afc', trainset=True, Nbpatches=opt.npatches, 
-                                        load_size = load_size, batch_size=opt.batch_size, serial_batches=True, nThreads=opt.nThreads, 
-                                        isTrain=True, shuffle=True, pin_memory=True, persistent_workers=True, 
-                                        src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, 
-                                        target=target, ram_cache_limit_mb=128)
 
-    dataset = data_loader.load_data()
-    dataset_size = len(data_loader)
-    D = len(dataset)
+
+
     for epoch in range(1, opt.nepoch + opt.nepoch_decay + 1):
             # Load training data to sample random patches every epoch
+            data_loader = dl.CreateDataLoader(opt.datasets[1 if target=='mos' else 0],dataset_mode='2afc', trainset=True, Nbpatches=opt.npatches, 
+                                        load_size = load_size, batch_size=opt.batch_size, serial_batches=True, nThreads=opt.nThreads, 
+                                                pin_memory=True, persistent_workers=True, prefetch_factor=2, drop_last=True, # prefetch_factor=2,
+                                        src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, 
+                                        target=target)
+            dataset = data_loader.load_data()
+            dataset_size = len(data_loader)
+            D = len(dataset)
+    
             # torch.cuda.empty_cache()
             # torch.cuda.synchronize()
             num_batches = len(dataset)
@@ -206,12 +211,25 @@ def main():
                 epoch_iter = total_steps - dataset_size * (epoch - 1)
 
                 trainer.set_input(data)
+                if i == 0:
+                    try:
+                        pdev = next(trainer.net.parameters()).device
+                    except StopIteration:
+                        pdev = "no-params"
+                    print(f"[DEV] torch.cuda.is_available={torch.cuda.is_available()} | "
+                        f"net={pdev} | ref={trainer.ref.device} | p0={trainer.p0.device} | "
+                        f"amp={trainer.use_amp} dtype={trainer.amp_dtype}")
+                    print("ref dtype/range:", trainer.ref.dtype, float(trainer.ref.min()), float(trainer.ref.max()))
+                    assert torch.cuda.is_available()
+                    assert str(pdev).startswith("cuda")
+                    assert str(trainer.ref.device).startswith("cuda")
+                    assert str(trainer.p0.device).startswith("cuda")
                 if i%50 == 0:
                     print('Epoch %d, Batch %d / %d, Total Steps %d' % (epoch, i, dataset_size, total_steps))
                 trainer.optimize_parameters()
 
-                if total_steps % opt.display_freq == 0:
-                    visualizer.display_current_results(trainer.get_current_visuals(), epoch)
+                # if total_steps % opt.display_freq == 0:
+                #     visualizer.display_current_results(trainer.get_current_visuals(), epoch)
 
                 errors = trainer.get_current_errors() # current error per batch
                 Loss_trainset += errors['loss_total'] # total loss over trainset = sum(Loss/batch)/nb_batches
@@ -250,15 +268,60 @@ def main():
 
             # Evaluate the Test set at the End of the epoch
             if epoch % opt.testset_freq == 0:
-                res_testset = lpips.Testset_DSIS(data_loader_testSet, trainer.forward, trainer.rankLoss.forward, name=Testset, use_amp=True) # SROCC & loss
-                for Tkey in res_testset.keys():
-                    test_TestSet.plot_TestSet_save(epoch=epoch, res=res_testset, keys=[Tkey,],  name=Tkey, to_plot=opt.train_plot, what_to_plot = 'TestSet_Res')
-                info = str(opt.nepoch) + "," + str(opt.nepoch_decay) + "," + str(opt.npatches) + "," + str(opt.nInputImg) + "," + str(opt.lr) + "," + str(epoch) + "," + str(Loss_trainset) + "," + str(res_testset['loss']) + "," + str(res_testset['SROCC']) + "\n"
+                # --- clean loader unwrap ---
+                ld = data_loader_testSet
+                if hasattr(ld, "load_data"):
+                    tmp = ld.load_data()
+                    if hasattr(tmp, "__iter__"):
+                        ld = tmp
+                    elif hasattr(tmp, "dataloader"):
+                        ld = tmp.dataloader
+                else:
+                    ld = getattr(ld, "dataloader", ld)
+
+                # --- evaluation ---
+                res_testset = trainer.Testset_DSIS(ld)
+                print(f"[TestSet] SROCC={res_testset['SROCC']:.4f}")
+
+                with torch.no_grad():
+                    if "mos_pred" in res_testset and "mos_true" in res_testset:
+                        pred = torch.from_numpy(res_testset["mos_pred"]).to(trainer.device)
+                        true = torch.from_numpy(res_testset["mos_true"]).to(trainer.device)
+                        test_loss = float(trainer.rankLoss(pred, true).mean().item())
+                    else:
+                        # fallback: on n'a que la loss agrégée legacy, ou rien → NaN
+                        test_loss = float(res_testset.get("loss", float("nan")))
+                print(f"[TestSet] loss={test_loss:.6f}")
+
+                # --- plotting ---
+                res_plot = {
+                    "SROCC": float(res_testset["SROCC"]),
+                    "loss":  test_loss,                 
+                }
+                keys_to_plot = ["SROCC", "loss"]
+
+                test_TestSet.plot_TestSet_save(
+                    epoch=epoch,
+                    res=res_plot,
+                    keys=keys_to_plot,
+                    name="TestSet",                     
+                    to_plot=opt.train_plot,
+                    what_to_plot="TestSet_Res",
+                )
+
+                # --- logging CSV/Text ---
+                info = (
+                    f"{opt.nepoch},{opt.nepoch_decay},{opt.npatches},{opt.nInputImg},"
+                    f"{opt.lr},{epoch},{Loss_trainset},{test_loss},{res_testset['SROCC']}\n"
+                )
             else:
-                info = str(opt.nepoch) + "," + str(opt.nepoch_decay) + "," + str(opt.npatches) + "," + str(opt.nInputImg) + "," + str(opt.lr) + "," + str(epoch) + "," + str(Loss_trainset) + "\n"
-            
+                info = (
+                    f"{opt.nepoch},{opt.nepoch_decay},{opt.npatches},{opt.nInputImg},"
+                    f"{opt.lr},{epoch},{Loss_trainset}\n"
+                )
+
             print('End of epoch %d / %d \t Time Taken: %d sec' %
-                  (epoch, opt.nepoch + opt.nepoch_decay, time.time() - epoch_start_time))
+                (epoch, opt.nepoch + opt.nepoch_decay, time.time() - epoch_start_time))
 
             #f_hyperParam.write(info)
             
