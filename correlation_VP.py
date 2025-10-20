@@ -83,17 +83,6 @@ def get_testset_ref_list(test_list_csv):
             if name_candidate not in ref_list:
                 ref_list.append(name_candidate)
     return ref_list
-def get_testset_dis_list(test_list_csv):
-    dis_list = []
-    with open(test_list_csv, mode='r') as f:
-        reader = csv.reader(f)
-        header = next(reader, None)
-
-        for row in reader:
-            if len(row) < 3:
-                continue
-            dis_list.append(row[1])
-    return dis_list
 def get_testset_dis_list_from_ref(test_list_csv, ref_obj_name):
     dis_list = []
     with open(test_list_csv, mode='r') as f:
@@ -107,120 +96,9 @@ def get_testset_dis_list_from_ref(test_list_csv, ref_obj_name):
             if dis_obj_name.startswith(ref_obj_name):
                 dis_list.append(dis_obj_name)
     return dis_list
-
 #SECTION - GETTERS END 
 
-def plot_global_correlations_per_viewpoint(base_dir, vp):
-    output_image = f'vp_{vp}_global_combined_regression.png'
-    correlations = [("Object", "Pearson", "Spearman", "Slope", "CI_slope_lower", "CI_slope_upper", "Intercept")]
-    output_csv = os.path.join(base_dir, f'vp_{vp}_global_combined_correlation.csv')
-    output_plot = os.path.join(base_dir, output_image)
 
-    all_mos = []
-    all_lpips = []
-
-    for object_name in os.listdir(base_dir):
-        object_dir = os.path.join(base_dir, object_name)
-        csv_file = os.path.join(object_dir, 'GLPIPS_results_testset.csv')
-
-        if not os.path.isfile(csv_file):
-            continue
-
-        mos_list = []
-        lpips_list = []
-
-        with open(csv_file, mode='r') as f:
-            reader = csv.reader(f)
-            header = next(reader)
-            for row in reader:
-                mos = float(row[1])
-                lpips_val = float(row[1 + int(vp)])  # vp commence à 1
-                mos_list.append(mos)
-                lpips_list.append(lpips_val)
-
-        mos_array = np.array(mos_list)
-        lpips_array = np.array(lpips_list)
-
-        X = sm.add_constant(lpips_array)
-        model = sm.GLM(mos_array, X, family=sm.families.Binomial()).fit()
-        predictions = model.predict(X)
-
-        slope = model.params[1]
-        intercept = model.params[0]
-        pearson_corr = stats.pearsonr(predictions, mos_array)[0]
-        spearman_corr = stats.spearmanr(predictions, mos_array)[0]
-        ci = model.conf_int(alpha=0.05)
-
-        correlations.append((
-            object_name,
-            round(pearson_corr, 4),
-            round(spearman_corr, 4),
-            round(slope, 4),
-            round(ci[1, 0], 4),
-            round(ci[1, 1], 4),
-            round(intercept, 4)
-        ))
-
-        all_mos.extend(mos_list)
-        all_lpips.extend(lpips_list)
-
-    # Sauvegarde CSV
-    with open(output_csv, mode='w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerows(correlations)
-
-    print(f"\nCombined viewpoint correlations saved to: {output_csv}")
-
-    # Régression globale
-    all_mos = np.array(all_mos)
-    all_lpips = np.array(all_lpips)
-    X = sm.add_constant(all_lpips)
-    model = sm.GLM(all_mos, X, family=sm.families.Binomial()).fit()
-    predictions = model.predict()
-    pearson_corr = stats.pearsonr(predictions, all_mos)[0]
-    spearman_corr = stats.spearmanr(predictions, all_mos)[0]
-    sorted_indices = np.argsort(all_lpips)
-    x_sorted = all_lpips[sorted_indices]
-    y_sorted = predictions[sorted_indices]
-
-    # Plot global
-    plt.figure(figsize=(7, 5))
-    plt.scatter(all_lpips, all_mos, label="Data", color='blue')
-    plt.plot(x_sorted, y_sorted, color='red', label='Logistic Fit')
-    plt.title(f'Global Correlation (Viewpoint {vp})\nPearson={pearson_corr:.3f} | Spearman={spearman_corr:.3f}')
-    plt.xlabel(f'LPIPS (Viewpoint {vp})')
-    plt.ylabel('MOS (normalized)')
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(output_plot)
-    plt.show()
-
-    print(f"Global correlation plot saved to: {output_plot}")
-
-    # Barplot par objet
-    object_names = []
-    pearson_values = []
-    
-    for row in correlations[1:]:
-        object_names.append(row[0])
-        pearson_values.append(row[1])
-    
-    plt.figure(figsize=(12, 6))
-    bars = plt.bar(object_names, pearson_values, color='skyblue', edgecolor='black')
-    plt.xticks(rotation=90)
-    plt.ylabel('Pearson Correlation')
-    plt.title(f'Pearson Correlation per Object (Viewpoint {vp})')
-    plt.grid(axis='y', linestyle='--', alpha=0.6)
-    plt.tight_layout()
-    
-    for bar, value in zip(bars, pearson_values):
-        plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,
-                 f'{value:.2f}', ha='center', va='bottom', fontsize=8)
-    
-    barplot_path = os.path.join(base_dir, f'vp_{vp}_barplot_correlation_per_object.png')
-    plt.savefig(barplot_path)
-    plt.show()
 
 
 def calculate_correlation_all_vps_combined(base_dir, batchname, output_csv='global_combined_correlation.csv'):
@@ -371,6 +249,7 @@ def calculate_correlation_all_vps_combined(base_dir, batchname, output_csv='glob
 def main():
     # Path to the base directory containing all objects
     model = config.model#'TMQ_Gautier_NR_1VPn_fib'
+    print('model:', model)
     testing_views = config.testing_views#1
     view_method = config.view_method#'Fibonacci' # 'Fibonacci', 'Y_fixed_0.3' or 'Polyhedron'
     render_method = config.render_method#'New_Render' # 'New_Render' or 'Old_render'

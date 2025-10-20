@@ -22,17 +22,10 @@ import tqdm  # <-- ajoute ceci à tes imports
 # -----------------------------------------------------------------------------
 
 
-class _UninitializedNet(torch.nn.Module):
-    def forward(self, *args, **kwargs):
-        raise RuntimeError("Trainer.net is not initialized. Call trainer.initialize(...) or pass net=... to Trainer().")
-
-class _UninitializedLoss(torch.nn.Module):
-    def forward(self, *args, **kwargs):
-        raise RuntimeError("Trainer.rankLoss is not initialized. Call trainer.initialize(...) or pass rankLoss=... to Trainer().")
 class Trainer:
     def __init__(
             self,
-            net: Optional[nn.Module] = None,
+            net: str = 'alex',
             rankLoss: Optional[nn.Module] = None,
             optimizer: Optional[Optimizer] = None,
             device: torch.device | str = "cuda",
@@ -40,12 +33,11 @@ class Trainer:
             amp_dtype: str = "float16",  # "bfloat16" ou "float16"
             enable_tf32: bool = False,
             compile_model: bool = False,
+
         ) -> None:
             self.device = torch.device(device)
 
             # Autoriser la construction vide (compat avec l'ancien train.py)
-            self.net = (net if net is not None else _UninitializedNet()).to(self.device)
-            self.rankLoss = (rankLoss if rankLoss is not None else _UninitializedLoss()).to(self.device)
             self.optimizer = optimizer  # peut rester None jusqu'à initialize()
 
             # Options précision
@@ -68,12 +60,7 @@ class Trainer:
                 self.scaler = torch.amp.GradScaler("cuda", enabled=False)
 
             # (Optionnel) torch.compile — seulement si un vrai net a été fourni
-            if compile_model and not isinstance(self.net, _UninitializedNet):
-                try:
-                    self.net = torch.compile(self.net)  # type: ignore[attr-defined]
-                except Exception:
-                    pass
-                
+           
             self.legacy_mode = True
             if self.legacy_mode:
                 self.use_amp = False
@@ -92,6 +79,7 @@ class Trainer:
             self.mos_predict = None
             self.mos = None
             self.fixed_patches_per_stimulus = None  # for old reshaping compatibility
+            self.use_gpu = True
     def initialize(self, model='lpips', net='alex', colorspace='Lab',
                pnet_rand=False, pnet_tune=False, model_path=None,
                use_gpu=True, printNet=False, spatial=False,
@@ -107,6 +95,7 @@ class Trainer:
             raise RuntimeError("Le module 'lpips' est requis par initialize().") from e
 
         # Etat
+        self.net = net
         self.model = model
         self.is_train = bool(is_train)
         self.spatial = bool(spatial)
@@ -157,18 +146,16 @@ class Trainer:
             self.lr = lr
             self.old_lr = lr
             self.optimizer = torch.optim.Adam(self.parameters, lr=lr, betas=(beta1, 0.999))
-        else:
+        else: # test mode
             self.net.eval()
 
 
-        # ---- Placement device et DataParallel (comme avant) ----
+        # ---- Placement device et DataParallel  ----
         self.net = self.net.to(dev)
         if use_gpu and torch.cuda.is_available() and len(gpu_ids) > 0:
-            # wrap DP identique à l'ancien comportement
             self.net = torch.nn.DataParallel(self.net, device_ids=gpu_ids)
             if self.is_train and self.rankLoss is not None:
-                # rankLoss sur GPU0 (historique)
-                self.rankLoss = self.rankLoss.to(device=f"cuda:{gpu_ids[0]}")
+                self.rankLoss = self.rankLoss.to(device=gpu_ids[0])
         else:
             if self.is_train and self.rankLoss is not None:
                 self.rankLoss = self.rankLoss.to(dev)
@@ -223,10 +210,10 @@ class Trainer:
         '''
         return self.net.forward(in0, in1, retPerLayer=retPerLayer)
     def forward_train(self):
+       
         self.d0 = self.forward(self.var_ref, self.var_p0)  # [N, 1] ou [N]
         d0 = self.d0
       
-        from torch.autograd import Variable
         self.var_judge = Variable(1.0 * self.judge).view(d0.size())
       
         judge_list = self.var_judge.detach().flatten().cpu().tolist()
@@ -237,8 +224,6 @@ class Trainer:
         else:
             stimulus_list = list(self.stimulus)
 
-        from itertools import groupby
-        from operator import itemgetter
 
         # mos_true_list = []
         # for key, group in groupby(zip(stimulus_list, judge_list), key=itemgetter(0)):
@@ -348,29 +333,15 @@ class Trainer:
         return {"loss": loss_mean, "MSE": mse_mean, "SROCC": float(srocc)}
 
     # ------------------------------ Sauvegarde --------------------------------
-    def save(self, save_dir: str, epoch: int | str = "latest") -> str:
-        os.makedirs(save_dir, exist_ok=True)
-        net_to_save = self.net.module if isinstance(self.net, torch.nn.DataParallel) else self.net
-        state = {
-            "net": net_to_save.state_dict(),
-            "optimizer": self.optimizer.state_dict() if self.optimizer is not None else None,
-            "epoch": epoch,
-            "amp": {
-                "use_amp": self.use_amp,
-                "amp_dtype": str(self.amp_dtype),
-                "scaler": (self.scaler.state_dict() if hasattr(self.scaler, "state_dict") else None),
-            },
-        }
-        # Nom de fichier: cas spécial pour "latest"
-        if isinstance(epoch, str) and epoch.lower() == "latest":
-            filename = "latest_net_.pth"
+    def save(self, path, label):
+        if(self.use_gpu):
+            self.save_network(self.net.module, path, '', label)
         else:
-            filename = f"net_{epoch}.pth"
-
-        path = os.path.join(save_dir, filename)
-        torch.save(state, path)
-        return path
-
+            self.save_network(self.net, path, '', label)
+    def save_network(self, network, path, network_label, epoch_label):
+        save_filename = '%s_net_%s.pth' % (epoch_label, network_label)
+        save_path = os.path.join(path, save_filename)
+        torch.save(network.state_dict(), save_path)
     # ------------------------------ Utilitaires -------------------------------
     def update_learning_rate(self, nepoch_decay: int):
         """

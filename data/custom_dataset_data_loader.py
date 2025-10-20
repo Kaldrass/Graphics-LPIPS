@@ -11,30 +11,31 @@ def CreateDataset(
         src_root=None, 
         root_refPatches=None, 
         root_distPatches=None, 
-        target=None
+        target=None,
+        cache_root=None
     ):
     dataset = None
     # Our dataset is baaset on the DSIS protocol (not 2afc). I adapted the code to suit DSIS. However, I did not change the function name.
     if dataset_mode=='2afc': # human judgements
         from data.dataset.twoafc_dataset import TwoAFCDataset
-        # dataset = TwoAFCDataset()
-        dataset = TwoAFCDataset(
-            dataroots=dataroots,
-            load_size=load_size,
-            Trainset=trainset,
-            maxNbPatches=Nbpatches,
-            src_root=src_root,
-            root_refPatches=root_refPatches,
-            root_distPatches=root_distPatches,
-            target=target
-        )
+        dataset = TwoAFCDataset()
     elif dataset_mode=='jnd': # human judgements
         from data.dataset.jnd_dataset import JNDDataset
         dataset = JNDDataset()
     else:
         raise ValueError("Dataset Mode [%s] not recognized." % dataset_mode)
 
-    # dataset.initialize(dataroots,load_size=load_size,Trainset = trainset, maxNbPatches = Nbpatches)
+    dataset.initialize(
+        dataroots=dataroots,
+        load_size=load_size,
+        Trainset=trainset,
+        maxNbPatches=Nbpatches,
+        src_root=src_root,
+        root_refPatches=root_refPatches,
+        root_distPatches=root_distPatches,
+        target=target,
+        cache_root=cache_root
+    )
     return dataset
 
 class CustomDatasetDataLoader(BaseDataLoader):
@@ -55,6 +56,7 @@ class CustomDatasetDataLoader(BaseDataLoader):
             src_root=None,
             root_refPatches=None,
             root_distPatches=None,
+            cache_root=None,
             target=None,
             **dl_kwargs
         ):
@@ -71,7 +73,8 @@ class CustomDatasetDataLoader(BaseDataLoader):
             src_root=src_root,
             root_refPatches=root_refPatches,
             root_distPatches=root_distPatches,
-            target=target
+            target=target,
+            cache_root=cache_root
         )
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,

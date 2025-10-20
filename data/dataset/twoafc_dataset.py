@@ -1,348 +1,4 @@
-# import os.path
-# import torchvision.transforms as transforms
-# from data.dataset.base_dataset import BaseDataset
-# from data.image_folder import make_dataset
-# from PIL import Image
-# import numpy as np
-# import torch
-# from torch.utils.data import TensorDataset
-# import csv
-# import cv2
-# import random
-# import collections
-# # from IPython import embed
 
-# # class TwoAFCDataset(BaseDataset):
-# #     """
-# #     Dataset for Two-Alternative Forced Choice (2AFC) tasks.
-# #     This dataset is designed to load reference images, distorted images, and judge scores
-# #     from a CSV file. It supports both training and testing modes, with the option to shuffle
-# #     the input CSV file for training datasets.
-# #     Args:
-# #         dataroots (str or list of str): Path(s) to the CSV file(s) containing the dataset.
-# #         load_size (int): Size to which images will be resized.
-# #         Trainset (bool): If True, the dataset is for training; if False, it is for testing.
-# #         maxNbPatches (int): Maximum number of patches to load per stimulus.
-# #     """
-
-# #     def initialize(self, dataroots, load_size=64, Trainset=False, maxNbPatches=205):
-# #         root_refPatches = r'D:\These\Projets\CompareMetrics\out\TMQ_ref_yf_1VP_Final'
-# #         root_distPatches = r'D:\These\Projets\CompareMetrics\out\TMQ_dis_yf_1VP_Final'
-# #         root_judges = r'D:\These\Graphics-LPIPS\dataset\judge_trainingset' if Trainset else r'D:\These\Graphics-LPIPS\dataset\judge_testset'
-
-# #         # Définit la transformation d'image (Resize + Tensor + Normalisation)
-# #         transform_list = [transforms.Resize(load_size),
-# #                         transforms.ToTensor(),
-# #                         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-# #         self.transform = transforms.Compose(transform_list)
-            
-# #         # shuffle input csv file
-# #         if(Trainset):
-# #             shuffled_inputfile = [] 
-# #             count_inputFile = 0
-# #             print('SHUFFLINGGGGGGGGGGGG!!!')
-# #             for datafile in dataroots:
-# #                 count_inputFile = count_inputFile + 1
-# #                 shuffledfileName = 'D:\\These\\Graphics-LPIPS\\dataset\\'+ 'Trainset_shuffled_' + str(count_inputFile) +'.csv'
-# #                 shuffled_inputfile.append(shuffledfileName)
-# #                 with open(datafile, 'r') as r, open(shuffledfileName, 'w') as w:
-# #                     data = r.readlines()
-# #                     header, rows = data[0], data[1:]
-# #                     random.shuffle(rows)
-# #                     rows = '\n'.join([row.strip() for row in rows])
-# #                     w.write(header + rows)
-            
-# #             dataroots = shuffled_inputfile
-    
-
-
-# #         if not isinstance(dataroots, list):
-# #             dataroots = [dataroots]
-
-# #         self.ref_imgs = []
-# #         self.p0_imgs = []
-# #         self.judge_paths = []
-# #         self.stimuliId = []
-# #         stimuliId = 0
-# #         nbiteration = 1
-
-# #         for csv_file_path in dataroots:
-# #             with open(csv_file_path, newline='') as csvfile:
-# #                 reader = csv.reader(csvfile)
-# #                 rows = list(reader)
-# #                 header = rows[0]
-# #                 data_rows = rows[1:]
-
-# #                 for line_count, row in enumerate(data_rows):
-# #                     model, stimulus, MOS = row[0], row[1], float(row[2])
-# #                     patch_csv_path = os.path.join(root_refPatches, model, 'patchs', f"{model}_patchlist.csv")
-# #                     ref_view_folder = os.path.join(root_refPatches, model, 'views')
-# #                     dis_view_folder = os.path.join(root_distPatches, stimulus, 'views')
-# #                     judge_path = os.path.join(root_judges, f"{stimulus}.npy")
-
-# #                     # Lecture unique du fichier de patchs
-# #                     with open(patch_csv_path, newline='') as patchfile:
-# #                         patch_reader = csv.reader(patchfile)
-# #                         patch_rows = list(patch_reader)
-# #                         patch_header = patch_rows[0]
-# #                         patch_data = patch_rows[1:]
-
-# #                         patch_size = int(patch_header[4].split('=')[1])
-# #                         nb_patches_per_view = [int(x.split('=')[1]) for x in patch_header[7:]]
-# #                         nb_patches_total = sum(nb_patches_per_view)
-
-# #                     nbfullimage = maxNbPatches // nb_patches_total
-# #                     nbrandomPatches = maxNbPatches % nb_patches_total
-
-# #                     for itr in range(nbiteration):
-# #                         stimuliId += 1
-
-# #                         # Preload all images by view number
-# #                         ref_images = {}
-# #                         dis_images = {}
-# #                         for v in range(1, len(nb_patches_per_view) + 1):
-# #                             img_path = os.path.join(ref_view_folder, f"view_{v}.png")
-# #                             ref_img = cv2.imread(img_path)  
-# #                             if ref_img is None:
-# #                                 raise RuntimeError(f"Image non trouvée ou corrompue : {img_path}")
-# #                             ref_img = ref_img[:, :, ::-1]
-# #                             dis_img = cv2.imread(os.path.join(dis_view_folder, f"view_{v}.png"))[:, :, ::-1]
-# #                             ref_images[v] = ref_img
-# #                             dis_images[v] = dis_img
-
-# #                         def extract_and_store_patch(row, view_index):
-# #                             x, y = int(row[0]), int(row[1])
-# #                             ref_patch = ref_images[view_index][y:y+patch_size, x:x+patch_size]
-# #                             dis_patch = dis_images[view_index][y:y+patch_size, x:x+patch_size]
-# #                             self.ref_imgs.append(self.transform(Image.fromarray(ref_patch)))
-# #                             self.p0_imgs.append(self.transform(Image.fromarray(dis_patch)))
-# #                             self.judge_paths.append(judge_path)
-# #                             self.stimuliId.append(stimuliId)
-# #                         patch_idx = 0
-# #                         for _ in range(nbfullimage):
-# #                             view_counter = 1
-# #                             patch_seen = 0
-# #                             for row in patch_data:
-# #                                 extract_and_store_patch(row, view_counter)
-# #                                 patch_seen += 1
-# #                                 if patch_seen == nb_patches_per_view[view_counter - 1]:
-# #                                     view_counter += 1
-# #                                     patch_seen = 0
-# #                                 patch_idx += 1
-
-# #                         # Random complément pour atteindre maxNbPatches
-# #                         if nbrandomPatches > 0:
-# #                             selected = random.sample(range(len(patch_data)), nbrandomPatches)
-# #                             for idx in selected:
-# #                                 # Détermine à quelle vue appartient ce patch
-# #                                 cumulative = 0
-# #                                 for v, nb in enumerate(nb_patches_per_view):
-# #                                     cumulative += nb
-# #                                     if idx < cumulative:
-# #                                         view_num = v + 1
-# #                                         break
-# #                                 extract_and_store_patch(patch_data[idx], view_num)
-# #         # On regroupe les listes d'images en tenseurs
-# #         self.ref_imgs = torch.stack(self.ref_imgs)       # shape: [N, 3, H, W]
-# #         self.p0_imgs = torch.stack(self.p0_imgs)
-# #         self.judges = torch.stack([
-# #             torch.from_numpy(np.load(path)).float().view(1, 1, 1)
-# #             for path in self.judge_paths
-# #         ])
-# #         self.stimuliId = torch.tensor(self.stimuliId).view(-1)
-# #         # Transfert GPU
-# #         # if torch.cuda.is_available():
-# #             # print("Transfert des données en mémoire GPU...")
-# #             # self.ref_imgs = self.ref_imgs.to("cuda:0")
-# #             # self.p0_imgs = self.p0_imgs.to("cuda:0")
-# #             # self.judges = self.judges.to("cuda:0")
-# #             # self.stimuliId = self.stimuliId.to("cuda:0")
-# #         self.dataset = TensorDataset(self.ref_imgs, self.p0_imgs, self.judges, self.stimuliId)
-
-# #         print(f"Nombre total de stimuli : {stimuliId}")
-# #         print(f"Nombre total de patches : {len(self.p0_imgs)}")
-
-# #     def __getitem__(self, index):
-# #         ref, p0, judge, stim = self.dataset[index]
-# #         return {
-# #             'ref': ref,
-# #             'p0': p0,
-# #             'judge': judge,
-# #             'stimuli_id': stim,
-# #         }
-# #     def __len__(self):
-# #         return len(self.dataset)
-
-
-# class TwoAFCDataset(BaseDataset):
-#     """
-#     Dataset for Two-Alternative Forced Choice (2AFC) tasks.
-#     This dataset is designed to load reference images, distorted images, and judge scores
-#     from a CSV file. It supports both training and testing modes, with the option to shuffle
-#     the input CSV file for training datasets.
-#     Args:
-#         dataroots (str or list of str): Path(s) to the CSV file(s) containing the dataset.
-#         load_size (int): Size to which images will be resized.
-#         Trainset (bool): If True, the dataset is for training; if False, it is for testing.
-#         maxNbPatches (int): Maximum number of patches to load per stimulus.
-#     """
-
-#     def initialize(self, dataroots, load_size=64, Trainset=False, maxNbPatches=205):
-#         self.patch_entries = []
-#         self.transform = transforms.Compose([
-#             transforms.Resize(load_size),
-#             transforms.ToTensor(),
-#             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-#         ])
-
-#         root_refPatches = r'D:\These\Projets\CompareMetrics\out\_TMQ_GAUTIER_\REF_4VP'#r'D:\These\Projets\CompareMetrics\out\TMQ_ref_yf_1VP_Final'
-#         root_distPatches = r'D:\These\Projets\CompareMetrics\out\_TMQ_GAUTIER_\DIS_4VP'
-#         root_judges = r'D:\These\Graphics-LPIPS\dataset\judge_trainingset' if Trainset else r'D:\These\Graphics-LPIPS\dataset\judge_testset'
-
-#         stimuli_id = 0
-
-#         if(Trainset):
-#                 shuffled_inputfile = [] 
-#                 count_inputFile = 0
-#                 print('SHUFFLINGGGGGGGGGGGG!!!')
-#                 for datafile in dataroots:
-#                     count_inputFile = count_inputFile + 1
-#                     shuffledfileName = 'D:\\These\\Graphics-LPIPS\\dataset\\'+ 'Trainset_shuffled_' + str(count_inputFile) +'.csv'
-#                     shuffled_inputfile.append(shuffledfileName)
-#                     with open(datafile, 'r') as r, open(shuffledfileName, 'w') as w:
-#                         data = r.readlines()
-#                         header, rows = data[0], data[1:]
-#                         random.shuffle(rows)
-#                         rows = '\n'.join([row.strip() for row in rows])
-#                         w.write(header + rows)
-                
-#                 dataroots = shuffled_inputfile
-
-#         if not isinstance(dataroots, list):
-#             dataroots = [dataroots]
-#         for csv_file_path in dataroots:
-#             with open(csv_file_path, newline='') as csvfile:
-#                 reader = csv.reader(csvfile)
-#                 header = next(reader)
-#                 for row in reader:
-#                     model, stimulus, MOS = row[0], row[1], float(row[2])
-#                     patch_csv_path = os.path.join(root_refPatches, model, 'patchs', f"{model}_patchlist.csv")
-#                     ref_view_folder = os.path.join(root_refPatches, model, 'views')
-#                     dis_view_folder = os.path.join(root_distPatches, stimulus, 'views')
-#                     judge_path = os.path.join(root_judges, f"{stimulus}.npy")
-
-#                     with open(patch_csv_path, newline='') as patchfile:
-#                         patch_reader = csv.reader(patchfile)
-#                         patch_header = next(patch_reader)
-#                         patch_data = list(patch_reader)
-
-#                         patch_size = int(patch_header[4].split('=')[1])
-#                         nb_patches_per_view = [int(x.split('=')[1]) for x in patch_header[7:]]
-#                         nb_patches_total = sum(nb_patches_per_view)
-#                         nb_patches_view_one = nb_patches_per_view[0]
-
-#                     # nb_full = maxNbPatches // nb_patches_total
-#                     nb_full = maxNbPatches // nb_patches_view_one # TRAINING ONLY ON VIEW ONE
-#                     # nb_rand = maxNbPatches % nb_patches_total
-#                     nb_rand = maxNbPatches % nb_patches_view_one
-
-#                     for _ in range(nb_full):
-#                         view_counter = 1
-#                         patch_seen = 0
-#                         #----------------------------------------------------------------------------------
-#                         # MULTI VIEWS
-#                         for row_patch in patch_data:
-#                             x, y = int(row_patch[0]), int(row_patch[1])
-#                             self.patch_entries.append({
-#                                 'ref_path': os.path.join(ref_view_folder, f"view_{view_counter}.png"),
-#                                 'dis_path': os.path.join(dis_view_folder, f"view_{view_counter}.png"),
-#                                 'x': x,
-#                                 'y': y,
-#                                 'patch_size': patch_size,
-#                                 'judge_path': judge_path,
-#                                 'stimuli_id': stimuli_id
-#                             })
-#                             patch_seen += 1
-#                             if patch_seen == nb_patches_per_view[view_counter - 1]:
-#                                 view_counter += 1
-#                                 patch_seen = 0
-#                         #----------------------------------------------------------------------------------
-#                         # SINGLE VIEW (VIEW 1 ONLY)
-#                         # for row_patch in patch_data[:nb_patches_view_one]:
-#                         #     x, y = int(row_patch[0]), int(row_patch[1])
-#                         #     self.patch_entries.append({
-#                         #         'ref_path': os.path.join(ref_view_folder, "view_1.png"),
-#                         #         'dis_path': os.path.join(dis_view_folder, "view_1.png"),
-#                         #         'x': x,
-#                         #         'y': y,
-#                         #         'patch_size': patch_size,
-#                         #         'judge_path': judge_path,
-#                         #         'stimuli_id': stimuli_id
-#                         #     })
-#                     if nb_rand > 0:
-#                         #----------------------------------------------------------------------------------
-#                         # MULTI VIEWS
-#                         selected = random.sample(range(len(patch_data)), nb_rand)
-#                         for idx in selected:
-#                             cumulative = 0
-#                             for v, nb in enumerate(nb_patches_per_view):
-#                                 cumulative += nb
-#                                 if idx < cumulative:
-#                                     view_num = v + 1
-#                                     break
-#                             x, y = int(patch_data[idx][0]), int(patch_data[idx][1])
-#                             self.patch_entries.append({
-#                                 'ref_path': os.path.join(ref_view_folder, f"view_{view_num}.png"),
-#                                 'dis_path': os.path.join(dis_view_folder, f"view_{view_num}.png"),
-#                                 'x': x,
-#                                 'y': y,
-#                                 'patch_size': patch_size,
-#                                 'judge_path': judge_path,
-#                                 'stimuli_id': stimuli_id
-#                             })
-#                         #----------------------------------------------------------------------------------
-#                         # SINGLE VIEW (VIEW 1 ONLY)
-#                         # selected = random.sample(range(nb_patches_view_one), nb_rand)
-#                         # for idx in selected:
-#                         #     x, y = int(patch_data[idx][0]), int(patch_data[idx][1])
-#                         #     self.patch_entries.append({
-#                         #         'ref_path': os.path.join(ref_view_folder, "view_1.png"),
-#                         #         'dis_path': os.path.join(dis_view_folder, "view_1.png"),
-#                         #         'x': x,
-#                         #         'y': y,
-#                         #         'patch_size': patch_size,
-#                         #         'judge_path': judge_path,
-#                         #         'stimuli_id': stimuli_id
-#                         #     })
-#                     stimuli_id += 1
-
-#     def __getitem__(self, index):
-#         entry = self.patch_entries[index]
-
-#         def load_patch(path, x, y, size):
-#             img = cv2.imread(path)
-#             if img is None:
-#                 raise RuntimeError(f"Image introuvable : {path}")
-#             img = img[:, :, ::-1]  # BGR → RGB
-#             patch = img[y:y+size, x:x+size]
-#             return self.transform(Image.fromarray(patch))
-
-#         ref_patch = load_patch(entry['ref_path'], entry['x'], entry['y'], entry['patch_size'])
-#         dis_patch = load_patch(entry['dis_path'], entry['x'], entry['y'], entry['patch_size'])
-#         judge = torch.from_numpy(np.load(entry['judge_path'])).float().view(1, 1, 1)
-
-#         return {
-#             'ref': ref_patch,
-#             'p0': dis_patch,
-#             'judge': judge,
-#             'stimuli_id': entry['stimuli_id'],
-#             'ref_path': entry['ref_path'],
-#             'p0_path': entry['dis_path'],
-#             'judge_path': entry['judge_path']
-#         }
-
-#     def __len__(self):
-#         return len(self.patch_entries)
 import os, shutil, time, hashlib, threading
 import csv
 import random
@@ -365,9 +21,6 @@ cv2.setNumThreads(0) # Avoid overthreading from open-cv
 _to_tensor_01 = T.ToTensor()
 _norm_m11 = T.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
 
-def pil_to_tensor_m11(img: Image.Image):
-    # img est déjà en RGB (grâce à imread_cached_bgr → PIL.convert("RGB"))
-    return _norm_m11(_to_tensor_01(img))
 def imread_cached_rgb(path: str, use_cache: bool = True):
     """
     Legacy-like : lecture simple en RGB via PIL, sans cache ni conversion BGR.
@@ -375,22 +28,10 @@ def imread_cached_rgb(path: str, use_cache: bool = True):
     if path is None or not os.path.exists(path):
         return None
     try:
-        return Image.open(path).convert("RGB")
+        img = cv2.imread(path)[:,:,::-1]  # BGR -> RGB
+        return img
     except Exception:
         return None
-def pil_crop_safe(img: Image.Image, x: int, y: int, size: int) -> Image.Image:
-    # Si le patch dépasse, on pad en noir (comme l’ancien comportement implicite avec PNG pré-découpés)
-    w, h = img.size
-    if x < 0 or y < 0 or x + size > w or y + size > h:
-        pad_left   = max(0, -x)
-        pad_top    = max(0, -y)
-        pad_right  = max(0, x + size - w)
-        pad_bottom = max(0, y + size - h)
-        if pad_left or pad_top or pad_right or pad_bottom:
-            img = ImageOps.expand(img, border=(pad_left, pad_top, pad_right, pad_bottom), fill=0)
-            x += pad_left
-            y += pad_top
-    return img.crop((x, y, x + size, y + size))
 def pick_view_path(base_folder: str, view_idx: int, ext: str = "auto") -> Optional[str]:
     """Retourne le chemin d'une vue existante (view_{i}.ext). Si ext='auto', essaie png/jpg/jpeg."""
     candidates = [ext] if ext != "auto" else ["png", "jpg", "jpeg"]
@@ -469,9 +110,9 @@ def ensure_on_ssd(src_path: str, src_root: Optional[str], cache_root: Optional[s
     return str(src)
 
 class TwoAFCDataset(Dataset):
-    def __init__(self, dataroots, load_size=64, Trainset=False, maxNbPatches=150, 
+    def initialize(self, dataroots, load_size=64, Trainset=False, maxNbPatches=150, 
                  root_refPatches=None, root_distPatches=None, src_root=None, target=None, img_ext='auto',
-                 cache_root: Optional[str] = r'C:\Graphics_LPIPS\cache'):
+                 cache_root: str = r'C:\Graphics_LPIPS\cache'):
         self.target = target
         self.patch_entries = []
         self.transform = transforms.Compose([
@@ -532,9 +173,11 @@ class TwoAFCDataset(Dataset):
                         nviews = len(nb_patches_per_view)
 
                     nb_patches_total = sum(nb_patches_per_view)
-
+                    # nb_patches_view_one = nb_patches_per_view[0]
                     nb_full = maxNbPatches // nb_patches_total  
                     nb_rand = maxNbPatches % nb_patches_total 
+                    # nb_full = maxNbPatches // nb_patches_view_one  
+                    # nb_rand = maxNbPatches % nb_patches_view_one 
 
                     # print('Nbfull IMAGE %.1f'%nb_full)
                     # print('NbRandom patches %.1f'%nb_rand)
@@ -615,13 +258,18 @@ class TwoAFCDataset(Dataset):
         if ref_img is None or dis_img is None:
             raise FileNotFoundError(f"Missing image: ref={ref_path}, dis={dis_path}")
 
-        # --- CROP PIL  ---
-        ref_patch = pil_crop_safe(ref_img, x, y, size)
-        dis_patch = pil_crop_safe(dis_img, x, y, size)
+        def load_patch(img, x, y, size):
+            
+            if img is None:
+                raise RuntimeError(f"Image introuvable : {img}")
+            patch = img[y:y+size, x:x+size]
+            return self.transform(Image.fromarray(patch))
 
-        # --- PIL → Tensor ∈ [-1,1] ---
-        ref_tensor = pil_to_tensor_m11(ref_patch)  # shape: [3,H,W], RGB
-        dis_tensor = pil_to_tensor_m11(dis_patch)
+        ref_patch = load_patch(ref_img, entry['x'], entry['y'], entry['patch_size'])
+        dis_patch = load_patch(dis_img, entry['x'], entry['y'], entry['patch_size'])
+        judge = torch.from_numpy(np.load(entry['judge_path'])).float().view(1, 1, 1)
+
+
         
         jp = entry['judge_path']
         judge = self._judge_cache.get(jp)
@@ -631,8 +279,8 @@ class TwoAFCDataset(Dataset):
             self._judge_cache[jp] = judge
 
         out = {
-            'ref': ref_tensor,
-            'p0': dis_tensor,
+            'ref': ref_patch,
+            'p0': dis_patch,
             'judge': torch.tensor(judge, dtype=torch.float32),
             'stimuli_id': torch.tensor(entry['stimuli_id'], dtype=torch.long),
 

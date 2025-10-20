@@ -1,8 +1,9 @@
 import subprocess
 
-model = 'TMQ_OR_1VP_org'#'GraphicsLPIPS_FinalNetwork'#'TMQ_OR_1VP_org' # 'LPIPS' or 'GraphicsLPIPS'
+model = 'TMQ_NR_16VP_fib'#'TMQ_OR_1VP_org'#'GraphicsLPIPS_FinalNetwork'#'TMQ_OR_1VP_org' # 'LPIPS' or 'GraphicsLPIPS'
+# ----- Testing parameters -----
 testing_views = 1
-view_method = 'Original' # 'Fibonacci', 'Y_fixed_0.3' or 'Polyhedron'
+view_method = 'Original' # 'Original', 'Fibonacci', 'Y_fixed_0.3' or 'Polyhedron'
 render_method = 'Old_Render' # 'New_Render' or 'Old_render'
 database = 'TMQ' # 'TSMD' or 'BASICS(PC)_DB' or 'TMQ'
 mos_csv_file = r'D:\These\BDD\TSMD\MOS\TSMD_MOS.csv' if database == 'TSMD' \

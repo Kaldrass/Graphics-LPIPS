@@ -20,6 +20,8 @@ from decimal import Decimal
 import find_dis_ref
 import correlation_VP
 import config
+import re
+
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-f','--csvfile', type=str, default='./dataset/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv')
 parser.add_argument('-m','--modelpath', type=str, default='./checkpoints/'+ config.model +'/latest_net_.pth', help='location of model')
@@ -37,27 +39,24 @@ ext = '.png'
 # ref_obj_list = find_dis_ref.find_ref_files(root_refPatches)
 ref_obj_list = correlation_VP.get_testset_ref_list(config.test_list_csv) # We will take the reference objects from the CSV file. The function 'get_ref_obj_list' will return a list of the reference objects.
 
-# ------------------------------- YANA VALIDATION VARIABLES -------------------------------
-
+print("Avaluating the testset with %s model" % (opt.modelpath))
 
 
 # patches_csv_list = find_dis_ref.find_ref_csvfiles(root_refPatches)
 #views_folder = '..../out/ref_folder/obj_name/views'
 
-loss_fn = lpips.LPIPS(net='alex', version=opt.version, pretrained=False)
 
-ckpt = torch.load(opt.modelpath, map_location="cpu") if opt.modelpath else None
-if ckpt is not None:
-    state = ckpt.get("net", ckpt) if isinstance(ckpt, dict) else ckpt
-    missing, unexpected = loss_fn.load_state_dict(state, strict=False)
-    if missing or unexpected:
-        print("[WARN] state_dict mismatch:", missing, unexpected)
 
+loss_fn = lpips.LPIPS(net='alex', version=opt.version, model_path=opt.modelpath)
 if opt.use_gpu:
     loss_fn = loss_fn.cuda()
 loss_fn.eval()
 torch.set_grad_enabled(False)
-    
+
+sd = loss_fn.state_dict()
+print("CKPT loaded keys:", len(sd))
+for k in ["lins.0.model.1.weight","net.slice1.0.weight"]:
+    if k in sd: print(k, float(sd[k].abs().sum()))
 ## Output file
 #If the file already exists, we delete it
 # else we create it
@@ -146,8 +145,8 @@ for ref_obj in ref_obj_list:
                                 dists_t = loss_fn(batch0, batch1)           # [N] ou [N,1]
                                 dists_t = dists_t.view(-1)
                                 dists_np = dists_t.detach().cpu().numpy()
-                                np.clip(dists_np, 0.0, 1.0, out=dists)
-                            GraphicsLPIPS = float(dists.mean())
+                                np.clip(dists_np, 0.0, 1.0, out=dists_np)
+                            GraphicsLPIPS = float(dists_np.mean())
                             List_GraphicsLPIPS.append(GraphicsLPIPS)
 
                         # Nouveau point de vue

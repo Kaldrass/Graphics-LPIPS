@@ -15,8 +15,8 @@ from decimal import Decimal
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-f','--csvfile', type=str, default='./dataset/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv')
-parser.add_argument('-m','--modelpath', type=str, default='./checkpoints/GraphicsLPIPS_FinalNetwork/latest_net_.pth', help='location of model')
-parser.add_argument('-o','--out', type=str, default='./GraphicsLPIPS_TestsetScores.csv')
+parser.add_argument('-m','--modelpath', type=str, default='./checkpoints/GraphicsLPIPS_test1/latest_net_.pth', help='location of model')
+parser.add_argument('-o','--out', type=str, default='./GLP_test1_TestsetScores.csv')
 parser.add_argument('-v','--version', type=str, default='0.1')
 parser.add_argument('--use_gpu', action='store_true', help='turn on flag to use GPU', default=True)
 

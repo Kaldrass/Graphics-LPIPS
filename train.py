@@ -1,3 +1,5 @@
+import shutil
+from typing import Dict
 import torch.backends.cudnn as cudnn
 cudnn.benchmark=False
 import torch
@@ -12,6 +14,7 @@ import argparse
 from util.visualizer import Visualizer
 from IPython import embed
 from Test_TestSet import Test_TestSet
+from pathlib import Path
 import csv
 import multiprocessing
 
@@ -40,7 +43,6 @@ class CUDAPrefetcher:
                     # On "pin" pour copie H2D async
                     if t.dtype == torch.uint8 and t.dim() == 4:  # images NCHW
                         t = t.pin_memory().to(self.device, non_blocking=True).to(torch.float32)
-                        # t.div_(255.0).sub_(0.5).div_(0.5) # Normalisation is done later, not needed to do it here
                         t = t.contiguous(memory_format=torch.channels_last)
                     elif t.dtype == torch.float32:
                         t = t.pin_memory().to(self.device, non_blocking=True)
@@ -89,14 +91,81 @@ def collate_to_numpy(batch):
         else:
             out[k] = np.array(vals)                      # ids etc.
     return out
+def _format_bytes(n: int) -> str:
+    for unit in ["B","KB","MB","GB","TB"]:
+        if n < 1024:
+            return f"{n:.2f} {unit}"
+        n /= 1024.0
+    return f"{n:.2f} PB"
+def clear_ssd_cache(cache_root: str, *, remove_root: bool=False, dry_run: bool=False) -> Dict[str, int | str]:
+    """
+    Supprime récursivement le cache SSD et renvoie des stats:
+      - files_deleted: nb de fichiers supprimés (ou à supprimer en dry_run)
+      - dirs_deleted:  nb de dossiers supprimés (ou à supprimer en dry_run)
+      - bytes_freed:   nb d'octets libérés (somme tailles fichiers)
+      - human_freed:   version lisible de bytes_freed
+    Paramètres:
+      - remove_root=False : ne supprime que le CONTENU de cache_root (garde le dossier)
+      - remove_root=True  : supprime cache_root lui-même (si possible)
+      - dry_run=True      : ne supprime pas, ne fait que compter/afficher
+    """
+    if not cache_root:
+        return {"files_deleted": 0, "dirs_deleted": 0, "bytes_freed": 0, "human_freed": "0 B"}
 
+    root = Path(cache_root)
+    if not root.exists() or not root.is_dir():
+        return {"files_deleted": 0, "dirs_deleted": 0, "bytes_freed": 0, "human_freed": "0 B"}
 
+    # --- PRÉ-SCAN ---
+    files = []
+    dirs  = []
+
+    if remove_root:
+        for p in root.rglob("*"):
+            (files if p.is_file() else dirs).append(p)
+        dirs.append(root)
+    else:
+        for p in root.rglob("*"):
+            (files if p.is_file() else dirs).append(p)
+
+    bytes_freed = 0
+    for f in files:
+        try:
+            bytes_freed += f.stat().st_size
+        except Exception:
+            pass  # fichier peut être verrouillé/absent entre-temps
+
+    files_deleted = len(files)
+    dirs_deleted  = len(dirs)
+
+    # --- SUPPRESSION ---
+    if not dry_run:
+        if remove_root:
+            # supprime tout d'un coup
+            shutil.rmtree(root, ignore_errors=True)
+        else:
+            # le CONTENU seulement
+            for child in root.iterdir():
+                try:
+                    if child.is_dir():
+                        shutil.rmtree(child, ignore_errors=True)
+                    else:
+                        child.unlink(missing_ok=True)
+                except Exception as e:
+                    pass
+
+    return {
+        "files_deleted": files_deleted,
+        "dirs_deleted": dirs_deleted,
+        "bytes_freed": bytes_freed,
+        "human_freed": _format_bytes(bytes_freed),
+    }
 os.environ['PYTHONWARNINGS'] = 'ignore'
-train_name = 'TMQ_OR_1VP_org_dbg'
-train_view_nbr = 1
+train_name = 'TMQ_NR_16VP_fib'#'TMQ_OR_1VP_org_dbg'
+train_view_nbr = 16
 target = 'judges'#'judges'  # 'mos' or 'judges', for TMQ put judges
-view_method = 'Original' # 'Fibonacci', 'Y_fixed_0.3', 'Polyhedron', 'Original'
-render_method = 'Old_Render' # 'New_Render' or 'Old_render'
+view_method = 'Fibonacci' # 'Fibonacci', 'Y_fixed_0.3', 'Polyhedron', 'Original'
+render_method = 'New_Render' # 'New_Render' or 'Old_render'
 database = 'TMQ' # 'TSMD' or 'BASICS(PC)_DB' or 'TMQ'
 def main():
     parser = argparse.ArgumentParser()
@@ -105,6 +174,7 @@ def main():
     
 
     parser.add_argument('--src_root', type=str, nargs='+', default="D:\\These\\Projets\\CompareMetrics\\out\\"+ database +"\\"+ render_method +"\\" + view_method, help='root folder containing ref and dist folders')
+    parser.add_argument('--cache_root', type=str, nargs='+', default="C:\\Graphics_LPIPS\\cache", help='root folder for caching viewpoints on SSD. Be sure to set it on SSD. Set to "" to disable caching.')
     parser.add_argument('--root_refPatches', type=str, nargs='+', default="\\Source\\"+ str(train_view_nbr) +'VP', help='reference patches relative location')
     parser.add_argument('--root_distPatches', type=str, nargs='+', default="\\Distorted\\" + str(train_view_nbr) + 'VP', help='distorted patches relative location')
 
@@ -161,9 +231,9 @@ def main():
     # load data from all test sets 
     # The random patches for the test set are only sampled once at the beginning of training in order to avoid noise in the validation loss.
     Testset = opt.testcsv[1 if target=='mos' else 0]
-    data_loader_testSet = dl.CreateDataLoader(Testset,dataset_mode='2afc', Nbpatches= opt.npatches, 
+    data_loader_testSet = dl.CreateDataLoader(Testset,dataset_mode='2afc', Nbpatches= opt.npatches, batch_size=opt.batch_size,
                                               pin_memory=False, drop_last=False, prefetch_factor=None, nThreads=0,
-                                              src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches,
+                                              src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, cache_root=opt.cache_root,
                                               target = target) 
     test_TestSet = Test_TestSet(opt)
     total_steps = 0
@@ -185,8 +255,8 @@ def main():
             # Load training data to sample random patches every epoch
             data_loader = dl.CreateDataLoader(opt.datasets[1 if target=='mos' else 0],dataset_mode='2afc', trainset=True, Nbpatches=opt.npatches, 
                                         load_size = load_size, batch_size=opt.batch_size, serial_batches=True, nThreads=opt.nThreads, 
-                                                pin_memory=True, persistent_workers=True, prefetch_factor=2, drop_last=True, # prefetch_factor=2,
-                                        src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, 
+                                                pin_memory=True, persistent_workers=True, prefetch_factor=2,  # prefetch_factor=2,
+                                        src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, cache_root=opt.cache_root,
                                         target=target)
             dataset = data_loader.load_data()
             dataset_size = len(data_loader)
@@ -332,6 +402,11 @@ def main():
     # fid.close()
     #f_hyperParam.close()
     print( 'End of %d epochs. Time taken: %d sec' %(opt.nepoch + opt.nepoch_decay,  time.time() -  start_time))
+    print( 'Clearing the cache ...')
+    if hasattr(opt, "cache_root") and opt.cache_root:
+        stats = clear_ssd_cache(opt.cache_root, remove_root=False, dry_run=False)
+        print(f"[cache] removed {stats['files_deleted']} files, {stats['dirs_deleted']} dirs | freed {stats['human_freed']}")
+
     
 if __name__ == '__main__':
     multiprocessing.set_start_method('spawn')

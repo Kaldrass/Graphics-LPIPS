@@ -9,7 +9,7 @@ def CreateDataLoader(
         pin_memory=False, 
         persistent_workers=False,
         prefetch_factor=0,
-        root_refPatches=None, root_distPatches=None, src_root = None, 
+        root_refPatches=None, root_distPatches=None, src_root = None, cache_root=None,
         target=None, 
         **dl_kwargs
         ):
@@ -38,7 +38,8 @@ def CreateDataLoader(
         persistent_workers=persistent_workers,
         root_refPatches=root_refPatches, 
         root_distPatches=root_distPatches, 
-        src_root=src_root, 
+        src_root=src_root,
+        cache_root=cache_root,
         target=target, 
         prefetch_factor=prefetch_factor,
         **dl_kwargs
