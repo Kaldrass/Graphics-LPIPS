@@ -47,12 +47,15 @@ print("Avaluating the testset with %s model" % (opt.modelpath))
 
 
 
-loss_fn = lpips.LPIPS(net='alex', version=opt.version, model_path=opt.modelpath)
-if opt.use_gpu:
-    loss_fn = loss_fn.cuda()
-loss_fn.eval()
-torch.set_grad_enabled(False)
-
+# loss_fn = lpips.LPIPS(net='alex', version=opt.version, model_path=opt.modelpath)
+# if opt.use_gpu:
+#     loss_fn = loss_fn.cuda()
+# loss_fn.eval()
+# torch.set_grad_enabled(False)
+loss_fn = lpips.LPIPS(net='alex',version=opt.version, model_path = opt.modelpath)# e.g. model_path = './checkpoints/Trial1/latest_net_.pth'
+if(opt.use_gpu):
+	loss_fn.cuda()
+ 
 sd = loss_fn.state_dict()
 print("CKPT loaded keys:", len(sd))
 for k in ["lins.0.model.1.weight","net.slice1.0.weight"]:
