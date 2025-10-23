@@ -127,7 +127,8 @@ class TwoAFCDataset(Dataset):
         self.root_refPatches =  self.src_root + root_refPatches
         self.root_distPatches = self.src_root + root_distPatches
         self.img_ext = img_ext
-        root_judges = r'D:\These\Graphics-LPIPS\dataset\judge_trainingset' if Trainset else r'D:\These\Graphics-LPIPS\dataset\judge_testset'
+        # root_judges = r'D:\These\Graphics-LPIPS\dataset\judge_trainingset' if Trainset else r'D:\These\Graphics-LPIPS\dataset\judge_testset'
+        root_judges = r'D:\These\Graphics-LPIPS\dataset\judges'
         # Limit of RAM cache for images per worker
         # SET ram_cache_limit_mb to 0 to disable RAM cache and use cv2.imread directly
         self._ssd_map = {}  # src_path -> ssd_path

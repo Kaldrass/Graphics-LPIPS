@@ -161,17 +161,17 @@ def clear_ssd_cache(cache_root: str, *, remove_root: bool=False, dry_run: bool=F
         "human_freed": _format_bytes(bytes_freed),
     }
 os.environ['PYTHONWARNINGS'] = 'ignore'
-train_name = 'TMQ_NR_16VP_fib'#'TMQ_OR_1VP_org_dbg'
-train_view_nbr = 16
+train_name = 'TMQ_OR_1VP_org_folds'#'TMQ_OR_1VP_org_dbg'
+train_view_nbr = 1
 target = 'judges'#'judges'  # 'mos' or 'judges', for TMQ put judges
-view_method = 'Fibonacci' # 'Fibonacci', 'Y_fixed_0.3', 'Polyhedron', 'Original'
-render_method = 'New_Render' # 'New_Render' or 'Old_render'
+view_method = 'Original' # 'Fibonacci', 'Y_fixed_0.3', 'Polyhedron', 'Original'
+render_method = 'Old_Render' # 'New_Render' or 'Old_render'
 database = 'TMQ' # 'TSMD' or 'BASICS(PC)_DB' or 'TMQ'
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--datasets', type=str, nargs='+', default=['./dataset/TexturedDB_80%_TrainList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/TSMD_80%_TrainList_scaled.csv'], help='datasets to train on')
-    parser.add_argument('--testcsv', type=str, nargs='+', default=['./dataset/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/TSMD_20%_TestList_scaled.csv'], help='datasets to test on')
-    
+    parser.add_argument('--datasets', type=str, nargs='+', default=['./dataset/folds/TexturedDB_80%_TrainList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/TSMD_80%_TrainList_scaled.csv'], help='datasets to train on')
+    parser.add_argument('--testcsv', type=str, nargs='+', default=['./dataset/folds/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/TSMD_20%_TestList_scaled.csv'], help='datasets to test on')
+
 
     parser.add_argument('--src_root', type=str, nargs='+', default="D:\\These\\Projets\\CompareMetrics\\out\\"+ database +"\\"+ render_method +"\\" + view_method, help='root folder containing ref and dist folders')
     parser.add_argument('--cache_root', type=str, nargs='+', default="C:\\Graphics_LPIPS\\cache", help='root folder for caching viewpoints on SSD. Be sure to set it on SSD. Set to "" to disable caching.')
@@ -230,182 +230,197 @@ def main():
 
     # load data from all test sets 
     # The random patches for the test set are only sampled once at the beginning of training in order to avoid noise in the validation loss.
-    Testset = opt.testcsv[1 if target=='mos' else 0]
-    data_loader_testSet = dl.CreateDataLoader(Testset,dataset_mode='2afc', Nbpatches= opt.npatches, batch_size=opt.batch_size,
-                                              pin_memory=False, drop_last=False, prefetch_factor=None, nThreads=0,
-                                              src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, cache_root=opt.cache_root,
-                                              target = target) 
-    test_TestSet = Test_TestSet(opt)
-    total_steps = 0
-    # fid = open(os.path.join(opt.checkpoints_dir,opt.name,'train_log.txt'),'w+')
-    # f_hyperParam = open(os.path.join(opt.checkpoints_dir,opt.name,'tuning_hyperparam.csv'),'a') 
-    # if os.stat(os.path.join(opt.checkpoints_dir,opt.name,'tuning_hyperparam.csv')).st_size == 0:
-        # f_hyperParam.write("nepoch,nepoch_decay,npatches,nInputImg,lr,epoch,TrainLoss,testLoss,SROCC_testset\n")
     
-    start_time = time.time()
-    print('Start training with the following options:')
-    for k, v in sorted(vars(opt).items()):  
-        print('%s: %s' % (str(k), str(v)))
-    print('Total number of patches: %d, batch size: %d, input images per batch: %d' % (opt.npatches, opt.batch_size, opt.nInputImg))
-    print('Total number of epochs: %d, learning rate: %.6f' % (opt.nepoch + opt.nepoch_decay, opt.lr))
+    ## Looping for the 5 folds in ./dataset/folds/ 
+    for fold in range(5):
+        print('--- Starting fold k%d ---'%fold)
+        # testSet is TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv. For each fold, we modify the name : 
+        # TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6_k${i}.csv
+        opt.save_dir = os.path.join(opt.checkpoints_dir,opt.name,'fold_k'+str(fold))
+        if(not os.path.exists(opt.save_dir)):
+            os.mkdir(opt.save_dir)
+        Testset = opt.testcsv[1 if target=='mos' else 0]
+        Testset_name, ext = os.path.splitext(Testset)
+        Testset = Testset_name + '_k' + str(fold) + ext
+        
+        data_loader_testSet = dl.CreateDataLoader(Testset,dataset_mode='2afc', Nbpatches= opt.npatches, batch_size=opt.batch_size,
+                                                pin_memory=False, drop_last=False, prefetch_factor=None, nThreads=0,
+                                                src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, cache_root=opt.cache_root,
+                                                target = target) 
+        test_TestSet = Test_TestSet(opt)
+        total_steps = 0
+        # fid = open(os.path.join(opt.checkpoints_dir,opt.name,'train_log.txt'),'w+')
+        # f_hyperParam = open(os.path.join(opt.checkpoints_dir,opt.name,'tuning_hyperparam.csv'),'a') 
+        # if os.stat(os.path.join(opt.checkpoints_dir,opt.name,'tuning_hyperparam.csv')).st_size == 0:
+            # f_hyperParam.write("nepoch,nepoch_decay,npatches,nInputImg,lr,epoch,TrainLoss,testLoss,SROCC_testset\n")
+        
+        start_time = time.time()
+        print('Start training with the following options:')
+        for k, v in sorted(vars(opt).items()):  
+            print('%s: %s' % (str(k), str(v)))
+        print('Total number of patches: %d, batch size: %d, input images per batch: %d' % (opt.npatches, opt.batch_size, opt.nInputImg))
+        print('Total number of epochs: %d, learning rate: %.6f' % (opt.nepoch + opt.nepoch_decay, opt.lr))
 
 
 
-    for epoch in range(1, opt.nepoch + opt.nepoch_decay + 1):
-            # Load training data to sample random patches every epoch
-            data_loader = dl.CreateDataLoader(opt.datasets[1 if target=='mos' else 0],dataset_mode='2afc', trainset=True, Nbpatches=opt.npatches, 
-                                        load_size = load_size, batch_size=opt.batch_size, serial_batches=True, nThreads=opt.nThreads, 
-                                                pin_memory=True, persistent_workers=True, prefetch_factor=2,  # prefetch_factor=2,
-                                        src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, cache_root=opt.cache_root,
-                                        target=target)
-            dataset = data_loader.load_data()
-            dataset_size = len(data_loader)
-            D = len(dataset)
-    
-            # torch.cuda.empty_cache()
-            # torch.cuda.synchronize()
-            num_batches = len(dataset)
-            num_samples = len(dataset.dataset)
-            # print('Epoch %d, dataset size: %d' % (epoch, dataset_size))<
-            print(f'Epoch {epoch}, batches: {num_batches}, samples: {num_samples}, bs={opt.batch_size}, workers={opt.nThreads}')
-
-            device = torch.device('cuda:0')
-            prefetch = CUDAPrefetcher(dataset, device)
-
-            epoch_start_time = time.time()
-            nb_batches = 0 
-            Loss_trainset = 0 
-            for i, data in enumerate(prefetch): 
-                iter_start_time = time.time()
-                total_steps += opt.batch_size
-                epoch_iter = total_steps - dataset_size * (epoch - 1)
-
-                trainer.set_input(data)
-                if i == 0:
-                    try:
-                        pdev = next(trainer.net.parameters()).device
-                    except StopIteration:
-                        pdev = "no-params"
-                    print(f"[DEV] torch.cuda.is_available={torch.cuda.is_available()} | "
-                        f"net={pdev} | ref={trainer.ref.device} | p0={trainer.p0.device} | "
-                        f"amp={trainer.use_amp} dtype={trainer.amp_dtype}")
-                    print("ref dtype/range:", trainer.ref.dtype, float(trainer.ref.min()), float(trainer.ref.max()))
-                    assert torch.cuda.is_available()
-                    assert str(pdev).startswith("cuda")
-                    assert str(trainer.ref.device).startswith("cuda")
-                    assert str(trainer.p0.device).startswith("cuda")
-                if i%50 == 0:
-                    print('Epoch %d, Batch %d / %d, Total Steps %d' % (epoch, i, dataset_size, total_steps))
-                trainer.optimize_parameters()
-
-                # if total_steps % opt.display_freq == 0:
-                #     visualizer.display_current_results(trainer.get_current_visuals(), epoch)
-
-                errors = trainer.get_current_errors() # current error per batch
-                Loss_trainset += errors['loss_total'] # total loss over trainset = sum(Loss/batch)/nb_batches
-                nb_batches += 1 
+        for epoch in range(1, opt.nepoch + opt.nepoch_decay + 1):
+                # Load training data to sample random patches every epoch
+                trainSet = opt.datasets[1 if target=='mos' else 0]
+                trainSet_name, ext = os.path.splitext(trainSet)
+                trainSet = trainSet_name + '_k' + str(fold) + ext
+                data_loader = dl.CreateDataLoader(trainSet,dataset_mode='2afc', trainset=True, Nbpatches=opt.npatches, 
+                                            load_size = load_size, batch_size=opt.batch_size, serial_batches=True, nThreads=opt.nThreads, 
+                                                    pin_memory=True, persistent_workers=True, prefetch_factor=2,  # prefetch_factor=2,
+                                            src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, cache_root=opt.cache_root,
+                                            target=target)
+                dataset = data_loader.load_data()
+                dataset_size = len(data_loader)
+                D = len(dataset)
+        
                 # torch.cuda.empty_cache()
-                # if total_steps % opt.print_freq == 0:
-                    # t = (time.time()-iter_start_time)/opt.batch_size
-                    # t2o = (time.time()-epoch_start_time)/3600.
-                    # t2 = t2o*D/(i+.0001)
-                    # visualizer.print_current_errors(epoch, epoch_iter, errors, t, t2=t2, t2o=t2o, fid=fid)
+                # torch.cuda.synchronize()
+                num_batches = len(dataset)
+                num_samples = len(dataset.dataset)
+                # print('Epoch %d, dataset size: %d' % (epoch, dataset_size))<
+                print(f'Epoch {epoch}, batches: {num_batches}, samples: {num_samples}, bs={opt.batch_size}, workers={opt.nThreads}')
 
-                    #for key in errors.keys():
-                        #visualizer.plot_current_errors_save(epoch, float(epoch_iter)/dataset_size, opt, errors, keys=[key,], name=key, to_plot=opt.train_plot)
+                device = torch.device('cuda:0')
+                prefetch = CUDAPrefetcher(dataset, device)
 
-                    # if opt.display_id > 0:
-                        # visualizer.plot_current_errors(epoch, float(epoch_iter)/dataset_size, opt, errors)
+                epoch_start_time = time.time()
+                nb_batches = 0 
+                Loss_trainset = 0 
+                for i, data in enumerate(prefetch): 
+                    iter_start_time = time.time()
+                    total_steps += opt.batch_size
+                    epoch_iter = total_steps - dataset_size * (epoch - 1)
 
-                # if total_steps % opt.save_latest_freq == 0:
-                    # print('saving the latest model (epoch %d, total_steps %d)' %(epoch, total_steps))
-                    # trainer.save(opt.save_dir, 'latest')
+                    trainer.set_input(data)
+                    if i == 0:
+                        try:
+                            pdev = next(trainer.net.parameters()).device
+                        except StopIteration:
+                            pdev = "no-params"
+                        print(f"[DEV] torch.cuda.is_available={torch.cuda.is_available()} | "
+                            f"net={pdev} | ref={trainer.ref.device} | p0={trainer.p0.device} | "
+                            f"amp={trainer.use_amp} dtype={trainer.amp_dtype}")
+                        print("ref dtype/range:", trainer.ref.dtype, float(trainer.ref.min()), float(trainer.ref.max()))
+                        assert torch.cuda.is_available()
+                        assert str(pdev).startswith("cuda")
+                        assert str(trainer.ref.device).startswith("cuda")
+                        assert str(trainer.p0.device).startswith("cuda")
+                    if i%50 == 0:
+                        print('Epoch %d, Batch %d / %d, Total Steps %d' % (epoch, i, dataset_size, total_steps))
+                    trainer.optimize_parameters()
 
-            if epoch % opt.save_epoch_freq == 0:
-                print('saving the model at the end of epoch %d, iters %d' %
-                      (epoch, total_steps))
-                trainer.save(opt.save_dir, 'latest')
-                trainer.save(opt.save_dir, epoch)
-                
-                print('nb batch %.1f'%nb_batches)
-                Loss_trainset = Loss_trainset/nb_batches
-                print('Epoch Loss %.6f'%Loss_trainset)
-                resPerEpoch = dict([('Trainset_Totalloss', Loss_trainset)])
-                
-                for key in resPerEpoch.keys():
-                    visualizer.plot_current_errors_save(epoch, float(0), opt, resPerEpoch, keys=[key,], name=key, to_plot=opt.train_plot)
+                    # if total_steps % opt.display_freq == 0:
+                    #     visualizer.display_current_results(trainer.get_current_visuals(), epoch)
+
+                    errors = trainer.get_current_errors() # current error per batch
+                    Loss_trainset += errors['loss_total'] # total loss over trainset = sum(Loss/batch)/nb_batches
+                    nb_batches += 1 
+                    # torch.cuda.empty_cache()
+                    # if total_steps % opt.print_freq == 0:
+                        # t = (time.time()-iter_start_time)/opt.batch_size
+                        # t2o = (time.time()-epoch_start_time)/3600.
+                        # t2 = t2o*D/(i+.0001)
+                        # visualizer.print_current_errors(epoch, epoch_iter, errors, t, t2=t2, t2o=t2o, fid=fid)
+
+                        #for key in errors.keys():
+                            #visualizer.plot_current_errors_save(epoch, float(epoch_iter)/dataset_size, opt, errors, keys=[key,], name=key, to_plot=opt.train_plot)
+
+                        # if opt.display_id > 0:
+                            # visualizer.plot_current_errors(epoch, float(epoch_iter)/dataset_size, opt, errors)
+
+                    # if total_steps % opt.save_latest_freq == 0:
+                        # print('saving the latest model (epoch %d, total_steps %d)' %(epoch, total_steps))
+                        # trainer.save(opt.save_dir, 'latest')
+
+                if epoch % opt.save_epoch_freq == 0:
+                    print('saving the model at the end of epoch %d, iters %d' %
+                        (epoch, total_steps))
+                    trainer.save(opt.save_dir, 'latest')
+                    trainer.save(opt.save_dir, epoch)
+                    
+                    print('nb batch %.1f'%nb_batches)
+                    Loss_trainset = Loss_trainset/nb_batches
+                    print('Epoch Loss %.6f'%Loss_trainset)
+                    resPerEpoch = dict([('Trainset_Totalloss', Loss_trainset)])
+                    
+                    for key in resPerEpoch.keys():
+                        visualizer.plot_current_errors_save(epoch, float(0), opt, resPerEpoch, keys=[key,], name=key, to_plot=opt.train_plot)
 
 
-            # Evaluate the Test set at the End of the epoch
-            if epoch % opt.testset_freq == 0:
-                # --- clean loader unwrap ---
-                ld = data_loader_testSet
-                if hasattr(ld, "load_data"):
-                    tmp = ld.load_data()
-                    if hasattr(tmp, "__iter__"):
-                        ld = tmp
-                    elif hasattr(tmp, "dataloader"):
-                        ld = tmp.dataloader
-                else:
-                    ld = getattr(ld, "dataloader", ld)
-
-                # --- evaluation ---
-                res_testset = trainer.Testset_DSIS(ld)
-                print(f"[TestSet] SROCC={res_testset['SROCC']:.4f}")
-
-                with torch.no_grad():
-                    if "mos_pred" in res_testset and "mos_true" in res_testset:
-                        pred = torch.from_numpy(res_testset["mos_pred"]).to(trainer.device)
-                        true = torch.from_numpy(res_testset["mos_true"]).to(trainer.device)
-                        test_loss = float(trainer.rankLoss(pred, true).mean().item())
+                # Evaluate the Test set at the End of the epoch
+                if epoch % opt.testset_freq == 0:
+                    # --- clean loader unwrap ---
+                    ld = data_loader_testSet
+                    if hasattr(ld, "load_data"):
+                        tmp = ld.load_data()
+                        if hasattr(tmp, "__iter__"):
+                            ld = tmp
+                        elif hasattr(tmp, "dataloader"):
+                            ld = tmp.dataloader
                     else:
-                        # fallback: on n'a que la loss agrégée legacy, ou rien → NaN
-                        test_loss = float(res_testset.get("loss", float("nan")))
-                print(f"[TestSet] loss={test_loss:.6f}")
+                        ld = getattr(ld, "dataloader", ld)
 
-                # --- plotting ---
-                res_plot = {
-                    "SROCC": float(res_testset["SROCC"]),
-                    "loss":  test_loss,                 
-                }
-                keys_to_plot = ["SROCC", "loss"]
+                    # --- evaluation ---
+                    res_testset = trainer.Testset_DSIS(ld)
+                    print(f"[TestSet] SROCC={res_testset['SROCC']:.4f}")
 
-                test_TestSet.plot_TestSet_save(
-                    epoch=epoch,
-                    res=res_plot,
-                    keys=keys_to_plot,
-                    name="TestSet",                     
-                    to_plot=opt.train_plot,
-                    what_to_plot="TestSet_Res",
-                )
+                    with torch.no_grad():
+                        if "mos_pred" in res_testset and "mos_true" in res_testset:
+                            pred = torch.from_numpy(res_testset["mos_pred"]).to(trainer.device)
+                            true = torch.from_numpy(res_testset["mos_true"]).to(trainer.device)
+                            test_loss = float(trainer.rankLoss(pred, true).mean().item())
+                        else:
+                            # fallback: on n'a que la loss agrégée legacy, ou rien → NaN
+                            test_loss = float(res_testset.get("loss", float("nan")))
+                    print(f"[TestSet] loss={test_loss:.6f}")
 
-                # --- logging CSV/Text ---
-                info = (
-                    f"{opt.nepoch},{opt.nepoch_decay},{opt.npatches},{opt.nInputImg},"
-                    f"{opt.lr},{epoch},{Loss_trainset},{test_loss},{res_testset['SROCC']}\n"
-                )
-            else:
-                info = (
-                    f"{opt.nepoch},{opt.nepoch_decay},{opt.npatches},{opt.nInputImg},"
-                    f"{opt.lr},{epoch},{Loss_trainset}\n"
-                )
+                    # --- plotting ---
+                    res_plot = {
+                        "SROCC": float(res_testset["SROCC"]),
+                        "loss":  test_loss,                 
+                    }
+                    keys_to_plot = ["SROCC", "loss"]
 
-            print('End of epoch %d / %d \t Time Taken: %d sec' %
-                (epoch, opt.nepoch + opt.nepoch_decay, time.time() - epoch_start_time))
+                    test_TestSet.plot_TestSet_save(
+                        epoch=epoch,
+                        res=res_plot,
+                        keys=keys_to_plot,
+                        name="TestSet",                     
+                        to_plot=opt.train_plot,
+                        what_to_plot="TestSet_Res",
+                    )
 
-            #f_hyperParam.write(info)
-            
-            if epoch > opt.nepoch:
-                trainer.update_learning_rate(opt.nepoch_decay)
+                    # --- logging CSV/Text ---
+                    info = (
+                        f"{opt.nepoch},{opt.nepoch_decay},{opt.npatches},{opt.nInputImg},"
+                        f"{opt.lr},{epoch},{Loss_trainset},{test_loss},{res_testset['SROCC']}\n"
+                    )
+                else:
+                    info = (
+                        f"{opt.nepoch},{opt.nepoch_decay},{opt.npatches},{opt.nInputImg},"
+                        f"{opt.lr},{epoch},{Loss_trainset}\n"
+                    )
 
-    # trainer.save_done(True)
-    # fid.close()
-    #f_hyperParam.close()
-    print( 'End of %d epochs. Time taken: %d sec' %(opt.nepoch + opt.nepoch_decay,  time.time() -  start_time))
-    print( 'Clearing the cache ...')
-    if hasattr(opt, "cache_root") and opt.cache_root:
-        stats = clear_ssd_cache(opt.cache_root, remove_root=False, dry_run=False)
-        print(f"[cache] removed {stats['files_deleted']} files, {stats['dirs_deleted']} dirs | freed {stats['human_freed']}")
+                print('End of epoch %d / %d \t Time Taken: %d sec' %
+                    (epoch, opt.nepoch + opt.nepoch_decay, time.time() - epoch_start_time))
+
+                #f_hyperParam.write(info)
+                
+                if epoch > opt.nepoch:
+                    trainer.update_learning_rate(opt.nepoch_decay)
+
+        # trainer.save_done(True)
+        # fid.close()
+        #f_hyperParam.close()
+        print( 'End of %d epochs. Time taken: %d sec' %(opt.nepoch + opt.nepoch_decay,  time.time() -  start_time))
+        print( 'Clearing the cache ...')
+        if hasattr(opt, "cache_root") and opt.cache_root:
+            stats = clear_ssd_cache(opt.cache_root, remove_root=False, dry_run=False)
+            print(f"[cache] removed {stats['files_deleted']} files, {stats['dirs_deleted']} dirs | freed {stats['human_freed']}")
 
     
 if __name__ == '__main__':

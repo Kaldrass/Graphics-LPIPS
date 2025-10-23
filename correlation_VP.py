@@ -256,9 +256,15 @@ def main():
     database = config.database#'TMQ' # 'TSMD' or 'BASICS(PC)_DB' or 'TMQ'
     batchname = database + '_' + render_method + '_' + view_method + '_' + model + '_' + str(testing_views) + 'VP'
 
-    base_dir = "D:/These/Graphics-LPIPS/out/" + database + "/" + render_method + "/" + view_method + "/" + model + "/" + str(testing_views) + "VP/_METRIC_RESULTS_TESTSET_/"
-    # process_all_objects(base_dir)
-    calculate_correlation_all_vps_combined(base_dir, batchname)
+    # if using folds, the base dir is different
+    if config.use_folds:
+        for fold_idx in range(5):
+            base_dir = "D:/These/Graphics-LPIPS/out/" + database + "/" + render_method + "/" + view_method + "/" + model +"/" + str(testing_views) + "VP/fold_k" + str(fold_idx) + "/_METRIC_RESULTS_TESTSET_/"
+            calculate_correlation_all_vps_combined(base_dir, batchname + '_fold' + str(fold_idx))
+    else: 
+        base_dir = "D:/These/Graphics-LPIPS/out/" + database + "/" + render_method + "/" + view_method + "/" + model + "/" + str(testing_views) + "VP/_METRIC_RESULTS_TESTSET_/"
+        # process_all_objects(base_dir)
+        calculate_correlation_all_vps_combined(base_dir, batchname)
     # plot_global_correlations_per_viewpoint(base_dir, 1)
 if __name__ == "__main__":
     main()

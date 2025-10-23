@@ -1,8 +1,9 @@
 import subprocess
 
-model = 'TMQ_OR_1VP_org'#'TMQ_OR_1VP_org'#'GraphicsLPIPS_FinalNetwork'#'TMQ_OR_1VP_org' # 'LPIPS' or 'GraphicsLPIPS'
+model = 'GraphicsLPIPS_FinalNetwork'#'TMQ_OR_1VP_org'#'GraphicsLPIPS_FinalNetwork'#'TMQ_OR_1VP_org' # 'LPIPS' or 'GraphicsLPIPS'
+use_folds = False
 # ----- Testing parameters -----
-testing_views = 4
+testing_views = 1
 view_method = 'Original' # 'Original', 'Fibonacci', 'Y_fixed_0.3' or 'Polyhedron'
 render_method = 'New_Render' # 'New_Render' or 'Old_render'
 database = 'TMQ' # 'TSMD' or 'BASICS(PC)_DB' or 'TMQ'
