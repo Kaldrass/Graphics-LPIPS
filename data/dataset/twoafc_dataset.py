@@ -128,7 +128,11 @@ class TwoAFCDataset(Dataset):
         self.root_distPatches = self.src_root + root_distPatches
         self.img_ext = img_ext
         # root_judges = r'D:\These\Graphics-LPIPS\dataset\judge_trainingset' if Trainset else r'D:\These\Graphics-LPIPS\dataset\judge_testset'
-        root_judges = r'D:\These\Graphics-LPIPS\dataset\judges'
+        if (target == 'judges'):
+            root_judges = r'D:\These\Graphics-LPIPS\dataset\judges'
+        else:
+            # Usually, the mos is located in the csv file used to create the dataloader
+            root_judges = None
         # Limit of RAM cache for images per worker
         # SET ram_cache_limit_mb to 0 to disable RAM cache and use cv2.imread directly
         self._ssd_map = {}  # src_path -> ssd_path
@@ -163,8 +167,10 @@ class TwoAFCDataset(Dataset):
                     patch_csv_path = os.path.join(self.root_refPatches, model, 'patchs', f"{model}_patchlist.csv")
                     ref_view_folder = os.path.join(self.root_refPatches, model, 'views')
                     dis_view_folder = os.path.join(self.root_distPatches, stimulus, 'views')
-                    judge_path = os.path.join(root_judges, f"{stimulus}.npy")
-
+                    if target == 'judges':
+                        judge_path = os.path.join(root_judges, f"{stimulus}.npy")
+                    else:
+                        judge_path = None
                     with open(patch_csv_path, newline='') as pf:
                         patch_reader = csv.reader(pf)
                         patch_header = next(patch_reader)
@@ -268,21 +274,25 @@ class TwoAFCDataset(Dataset):
 
         ref_patch = load_patch(ref_img, entry['x'], entry['y'], entry['patch_size'])
         dis_patch = load_patch(dis_img, entry['x'], entry['y'], entry['patch_size'])
-        judge = torch.from_numpy(np.load(entry['judge_path'])).float().view(1, 1, 1)
-
+        # if the target is judges, load the judge file
+        if self.target == 'judges':
+            judge = torch.from_numpy(np.load(entry['judge_path'])).float().view(1, 1, 1)
+        else:
+            judge = None
 
         
         jp = entry['judge_path']
         judge = self._judge_cache.get(jp)
-        if judge is None:
-            j = np.load(jp).astype(np.float32)
-            judge = float(j) if j.ndim == 0 else j
-            self._judge_cache[jp] = judge
+        # if judge is None:
+            # j = np.load(jp).astype(np.float32)
+            # judge = float(j) if j.ndim == 0 else j
+            # self._judge_cache[jp] = judge
 
         out = {
             'ref': ref_patch,
             'p0': dis_patch,
-            'judge': torch.tensor(judge, dtype=torch.float32),
+            # If we don't have judges, we return the mos as target
+            'judge': torch.tensor(judge, dtype=torch.float32) if judge is not None else torch.tensor(entry.get('mos', 0.0), dtype=torch.float32),
             'stimuli_id': torch.tensor(entry['stimuli_id'], dtype=torch.long),
 
             # meta facultatives (si ton code en amont les loggue)

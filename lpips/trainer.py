@@ -14,7 +14,7 @@ from operator import itemgetter
 from statistics import mean
 from scipy import stats
 
-import tqdm  # <-- ajoute ceci à tes imports
+import tqdm 
 # -----------------------------------------------------------------------------
 # Trainer — version corrigée avec backward, AMP bf16/fp16, TF32, channels_last,
 #           agrégation par stimulus robuste (nb de patches variable),
@@ -53,13 +53,11 @@ class Trainer:
                 except Exception:
                     pass
 
-            # GradScaler : utile seulement en fp16
+            # GradScaler utile seulement en fp16
             if self.use_amp and self.amp_dtype is torch.float16:
                 self.scaler = torch.amp.GradScaler("cuda", enabled=True)
             else:
                 self.scaler = torch.amp.GradScaler("cuda", enabled=False)
-
-            # (Optionnel) torch.compile — seulement si un vrai net a été fourni
            
             self.legacy_mode = True
             if self.legacy_mode:
@@ -160,7 +158,6 @@ class Trainer:
             if self.is_train and self.rankLoss is not None:
                 self.rankLoss = self.rankLoss.to(dev)
 
-        # Optionnel: impression du réseau (si dispo)
         if printNet:
             try:
                 from networks import print_network
@@ -168,7 +165,6 @@ class Trainer:
                 print_network(self.net)
                 print('--------------------------------------------')
             except Exception:
-                # pas bloquant si util manquant
                 pass
 
         return self
@@ -176,7 +172,6 @@ class Trainer:
     @torch.no_grad()
 
     def set_input(self, input_dict):
-        # Tensors CPU/GPU possibles selon ton prefetcher → mets-les sur device ensuite.
         self.ref = input_dict["ref"].to(self.device, non_blocking=True).contiguous(memory_format=torch.channels_last)
         self.p0  = input_dict["p0"].to(self.device, non_blocking=True).contiguous(memory_format=torch.channels_last)
         self.judge = input_dict["judge"].to(self.device, dtype=torch.float32, non_blocking=True).view(-1)
@@ -271,7 +266,7 @@ class Trainer:
             for m in self.net.modules():
                 if hasattr(m, "weight") and hasattr(m, "kernel_size") and m.kernel_size == (1,1):
                     m.weight.data = torch.clamp(m.weight.data, min=0.0)
-    # ------------------------------- Évaluation (legacy) ------------------------------
+    # ------------------------------- Évaluation  ------------------------------
     @torch.inference_mode()
     def Testset_DSIS(self, loader, name="Test"):
 
@@ -289,14 +284,13 @@ class Trainer:
             ref = data["ref"].to(device, non_blocking=True)
             p0  = data["p0"].to(device, non_blocking=True)
             gt  = data["judge"].to(device, non_blocking=True)
-            stimulus = data["stimuli_id"]  # reste CPU pour le groupby Python
+            stimulus = data["stimuli_id"]  
 
-            # Réseau via le wrapper legacy
             d0 = self.forward(ref, p0).to(device)  # [N] ou [N,1] → on aplati ensuite
 
-            # --- Agrégation 'legacy' (groupby Python) ---
+            # --- Agrégation ---
             gt_list = gt.detach().cpu().numpy().flatten().tolist()
-            # groupby exige contiguïté par stimulus (comme l'ancien)
+            # groupby exige contiguïté par stimulus
             mos_list = [mean(map(itemgetter(1), group))
                         for key, group in groupby(zip(stimulus, gt_list), key=itemgetter(0))]
             NbStim = len(mos_list)
@@ -306,7 +300,7 @@ class Trainer:
             d0_reshaped = d0.view(-1).view(NbStim, NbPatchesPerStim, 1, 1)
             MOSpred = torch.mean(d0_reshaped, dim=1, keepdim=True)  # [NbStim,1,1,1]
 
-            # Loss (si dispo)
+            # Loss
             if hasattr(self, "rankLoss") and callable(getattr(self.rankLoss, "forward", None)):
                 loss = self.rankLoss.forward(MOSpred, MOS)
                 val_loss_sum += float(loss.detach().cpu().numpy())
@@ -319,7 +313,7 @@ class Trainer:
 
             val_steps += 1
 
-            # --- Accumulation en floats (évite les tensors dans des listes) ---
+            # --- Accumulation en floats ---
             MOSpredicteds_f.extend(MOSpred.detach().cpu().numpy().flatten().tolist())
             MOSs_f.extend(MOS.detach().cpu().numpy().flatten().tolist())
 
@@ -351,17 +345,17 @@ class Trainer:
         if self.optimizer is None:
             raise RuntimeError("update_learning_rate: optimizer is None. Appelle initialize(...) d'abord.")
         if nepoch_decay is None or nepoch_decay <= 0:
-            # rien à faire si pas de phase de décroissance
+
             return self.optimizer.param_groups[0]["lr"]
 
-        # Valeurs de référence (si pas déjà posées)
+        # Valeurs de référence
         if not hasattr(self, "lr"):
             self.lr = float(self.optimizer.param_groups[0]["lr"])
         if not hasattr(self, "old_lr"):
             self.old_lr = float(self.optimizer.param_groups[0]["lr"])
 
         lrd = float(self.lr) / float(nepoch_decay)   # quantité à retrancher à chaque epoch de décroissance
-        lr = max(self.old_lr - lrd, 0.0)             # évite les LR négatifs
+        lr = max(self.old_lr - lrd, 0.0)             
 
         for param_group in self.optimizer.param_groups:
             param_group["lr"] = lr
@@ -392,10 +386,8 @@ class Trainer:
             raise RuntimeError("Aucune image disponible (self.ref/self.p0 est None).")
         if x.ndim == 3:
             x = x.unsqueeze(0)  # -> [1,C,H,W]
-        # si ce sont des uint8 CHW (cas dataset), convertis en float et normalise
         if x.dtype == torch.uint8:
             x = x.float() / 255.0
-        # remet en [0,1] si besoin (on suppose [-1,1] après set_input)
         if x.min() < 0.0 or x.max() > 1.0:
             x = (x + 1.0) * 0.5
         x = x.clamp(0, 1)
@@ -415,7 +407,6 @@ class Trainer:
         - 'diff' (optionnel) : |ref - p0| en uint8 pour repérage
         """
         if self.ref is None or self.p0 is None:
-            # compatible avec les anciens scripts: retourner un dict vide au lieu de lever
             return {}
 
         ref_img = self._denorm_to_uint8(self.ref)

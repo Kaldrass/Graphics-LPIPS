@@ -46,7 +46,11 @@ if (config.use_folds):
         # ref_obj_list = correlation_VP.get_testset_ref_list(config.test_list_csv) # We will take the reference objects from the CSV file. The function 'get_ref_obj_list' will return a list of the reference objects.
         # For folds, we transform 
         # './dataset/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv' into './dataset/folds/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6_k${fold}.csv'
-        test_list_csv_fold = './dataset/folds/' + config.test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
+        if config.database == 'TMQ':
+            test_list_csv_fold = './dataset/folds/' + config.test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
+        else: 
+            test_list_csv_fold = './dataset/TSMD/folds/' + config.test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
+            
         ref_obj_list_folds.append(correlation_VP.get_testset_ref_list(test_list_csv_fold))
         # the model is also different
         # e.g. : './checkpoints/TMQ_NR_1VP_org_TAA/fold_k0/latest_net_.pth'
@@ -79,7 +83,7 @@ for fold_idx, ref_obj_list in enumerate(ref_obj_list_folds):
     if(opt.use_gpu):
         loss_fn.cuda()
     
-    sd = loss_fn.state_dict()
+    # sd = loss_fn.state_dict()
     # print("CKPT loaded keys:", len(sd))
     # for k in ["lins.0.model.1.weight","net.slice1.0.weight"]:
     #     if k in sd: print(k, float(sd[k].abs().sum()))

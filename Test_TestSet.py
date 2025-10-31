@@ -25,7 +25,7 @@ class Test_TestSet():
         loss_fn = lpips.LPIPS(net=Net,version='0.1', model_path = ModelPath)
         if(use_gpu):
             loss_fn.cuda()
-        
+        print('Test_TestSet : Testing Lpips model on Test Set: %s'%TestSet_csvFile)
         # crawl csv file
         IMG0 = []
         IMG1 = []

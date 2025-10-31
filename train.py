@@ -161,12 +161,12 @@ def clear_ssd_cache(cache_root: str, *, remove_root: bool=False, dry_run: bool=F
         "human_freed": _format_bytes(bytes_freed),
     }
 os.environ['PYTHONWARNINGS'] = 'ignore'
-train_name = 'TMQ_OR_1VP_org_folds'#'TMQ_OR_1VP_org_dbg'
-train_view_nbr = 1
-target = 'judges'#'judges'  # 'mos' or 'judges', for TMQ put judges
-view_method = 'Original' # 'Fibonacci', 'Y_fixed_0.3', 'Polyhedron', 'Original'
-render_method = 'Old_Render' # 'New_Render' or 'Old_render'
-database = 'TMQ' # 'TSMD' or 'BASICS(PC)_DB' or 'TMQ'
+train_name = 'TSMD_NR_4VP_yf03_kfolds'#'TMQ_OR_1VP_org_dbg'
+train_view_nbr = 4
+target = 'mos'#'judges'  # 'mos' or 'judges', for TMQ put judges
+view_method = 'Y_fixed_0.3' # 'Fibonacci', 'Y_fixed_0.3', 'Polyhedron', 'Original'
+render_method = 'New_Render' # 'New_Render' or 'Old_render'
+database = 'TSMD' # 'TSMD' or 'BASICS(PC)_DB' or 'TMQ'
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--datasets', type=str, nargs='+', default=['./dataset/folds/TexturedDB_80%_TrainList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/TSMD_80%_TrainList_scaled.csv'], help='datasets to train on')

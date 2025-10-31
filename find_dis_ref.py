@@ -50,25 +50,16 @@ def find_dis_files(root_disPatches, ref_obj_name):
     # ├── obj_1_dis_2
     #...
 
-    # We get the list of the names of the objects in the root_refPatches folder
-    # the names are directly the first subfolder names of the root_refPatches folder
-    # ref_folders = os.listdir(root_refPatches) # This one is if we need to list the entire root_refPatches folder
-    # We want to exclude any folder that is not a directory
-    # ref_folders = [f for f in ref_folders if os.path.isdir(os.path.join(root_refPatches, f))]
-
     # We get the list of the names of the objects in the root_distPatches folder
     # So we find the name of the distorted objects by searching the name of the reference object in the root_distPatches folder.
     # e.g. :
     # ref_img : Orbiter_Space_Shuttle_OV-103_Discovery-150k-4096
     # dis_img : Orbiter_Space_Shuttle_OV-103_Discovery-150k-4096_simpL1_qp10_qt8_decompJPEG_512x512_Q75
-    # dis_files = []
-    # for ref_folder in ref_folders:
+ 
     # We get the name of the reference object
-    # ref_obj_name = os.path.basename(ref_folder)
     # We search for the name of the distorted objects in the root_distPatches folder
     # We take any folder that contains the name of the reference object and is a directory
     dis_files = [f for f in os.listdir(root_disPatches) if ref_obj_name in f and os.path.isdir(os.path.join(root_disPatches, f))]
-    # dis_files.append(dis_obj_name)
     # dis_files might be a list of lists, really big size. around 3000 elements for Yana's Database.
     return dis_files
 
