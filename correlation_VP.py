@@ -244,7 +244,7 @@ def calculate_correlation_all_vps_combined(base_dir, batchname, output_csv='glob
     plt.show()
     
     print(f"Barplot saved to: {barplot}")
-
+    return pearson_corr
 
 def main():
     # Path to the base directory containing all objects
@@ -258,13 +258,16 @@ def main():
 
     # if using folds, the base dir is different
     if config.use_folds:
+        pcors = []
         for fold_idx in range(5):
             base_dir = "D:/These/Graphics-LPIPS/out/" + database + "/" + render_method + "/" + view_method + "/" + model +"/" + str(testing_views) + "VP/fold_k" + str(fold_idx) + "/_METRIC_RESULTS_TESTSET_/"
-            calculate_correlation_all_vps_combined(base_dir, batchname + '_fold' + str(fold_idx))
+            pcors.append(calculate_correlation_all_vps_combined(base_dir, batchname + '_fold' + str(fold_idx)))
     else: 
         base_dir = "D:/These/Graphics-LPIPS/out/" + database + "/" + render_method + "/" + view_method + "/" + model + "/" + str(testing_views) + "VP/_METRIC_RESULTS_TESTSET_/"
         # process_all_objects(base_dir)
         calculate_correlation_all_vps_combined(base_dir, batchname)
     # plot_global_correlations_per_viewpoint(base_dir, 1)
-if __name__ == "__main__":
+    pcorr = np.mean(pcors) if config.use_folds else None
+    print("pearson mean : {:.3f}".format(pcorr))
+if __name__ == "__main__":  
     main()
