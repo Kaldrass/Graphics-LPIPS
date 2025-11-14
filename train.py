@@ -161,8 +161,8 @@ def clear_ssd_cache(cache_root: str, *, remove_root: bool=False, dry_run: bool=F
         "human_freed": _format_bytes(bytes_freed),
     }
 os.environ['PYTHONWARNINGS'] = 'ignore'
-train_name = 'TSMD_NR_4VP_yf03_kfolds_bis'#'TMQ_OR_1VP_org_dbg'
-train_view_nbr = 4
+train_name = 'TSMD_NR_8VP_yf03_kfolds'#'TMQ_OR_1VP_org_dbg'
+train_view_nbr = 8
 target = 'mos'#'judges'  # 'mos' or 'judges', for TMQ put judges
 view_method = 'Y_fixed_0.3' # 'Fibonacci', 'Y_fixed_0.3', 'Polyhedron', 'Original'
 render_method = 'New_Render' # 'New_Render' or 'Old_render'

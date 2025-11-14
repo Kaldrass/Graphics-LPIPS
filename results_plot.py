@@ -39,7 +39,7 @@ ax = sns.heatmap(
     annot=True,        # affiche les valeurs dans les cases
     fmt=".3f",          
     cmap="viridis",    # viridis pour Baptiste
-    vmin=0.800, vmax=0.900 
+    vmin=0.808, vmax=0.881 
 )
 
 ax.set_title("Intra-TMQ - PLCC", pad=12)
@@ -74,7 +74,7 @@ ax = sns.heatmap(
     annot=True,
     fmt=".3f",
     cmap="viridis",
-    vmin=0.800, vmax=0.900
+    vmin=0.700, vmax=0.900
 )
 ax.set_title("Intra-TSMD (New) - PLCC", pad=12)
 ax.set_xlabel("Test")
@@ -114,7 +114,7 @@ ax = sns.heatmap(
     annot=True,
     fmt=".3f",
     cmap="viridis",
-    vmin=0.777, vmax=0.900
+    vmin=0.7, vmax=0.900
 )
 ax.set_title("Cross-base (New Render) - PLCC", pad=12)
 ax.set_xlabel("Test")
