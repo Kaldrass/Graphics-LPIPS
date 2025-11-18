@@ -161,22 +161,19 @@ def clear_ssd_cache(cache_root: str, *, remove_root: bool=False, dry_run: bool=F
         "human_freed": _format_bytes(bytes_freed),
     }
 os.environ['PYTHONWARNINGS'] = 'ignore'
-train_name = train_helpers.train_name
-train_view_nbr = train_helpers.train_view_nbr
-target = train_helpers.target
-view_method = train_helpers.view_method
-render_method = train_helpers.render_method
-database = train_helpers.database
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--datasets', type=str, nargs='+', default=['./dataset/folds/TexturedDB_80%_TrainList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/folds/TSMD_80%_TrainList_scaled.csv'], help='datasets to train on')
     parser.add_argument('--testcsv', type=str, nargs='+', default=['./dataset/folds/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/folds/TSMD_20%_TestList_scaled.csv'], help='datasets to test on')
 
 
-    parser.add_argument('--src_root', type=str, nargs='+', default="D:\\These\\Projets\\CompareMetrics\\out\\"+ database +"\\"+ render_method +"\\" + view_method, help='root folder containing ref and dist folders')
-    parser.add_argument('--cache_root', type=str, nargs='+', default="C:\\Graphics_LPIPS\\cache", help='root folder for caching viewpoints on SSD. Be sure to set it on SSD. Set to "" to disable caching.')
-    parser.add_argument('--root_refPatches', type=str, nargs='+', default="\\Source\\"+ str(train_view_nbr) +'VP', help='reference patches relative location')
-    parser.add_argument('--root_distPatches', type=str, nargs='+', default="\\Distorted\\" + str(train_view_nbr) + 'VP', help='distorted patches relative location')
+    parser.add_argument('--src_root', type=str, help='root folder containing ref and dist folders')
+    parser.add_argument('--cache_root', type=str, default="C:\\Graphics_LPIPS\\cache", help='root folder for caching viewpoints on SSD. Be sure to set it on SSD. Set to "" to disable caching.')
+    parser.add_argument('--root_refPatches', type=str, help='reference patches relative location')
+    parser.add_argument('--root_distPatches', type=str, help='distorted patches relative location')
+    parser.add_argument('--name', type=str, help='directory name for training')
+    parser.add_argument('--target', type=str, help='type of ground truth scores: mos or judges')
 
     parser.add_argument('--model', type=str, default='lpips', help='distance model type [lpips] for linearly calibrated net, [baseline] for off-the-shelf network, [l2] for euclidean distance, [ssim] for Structured Similarity Image Metric')
     parser.add_argument('--net', type=str, default='alex', help='[squeeze], [alex], or [vgg] for network architectures')
@@ -202,7 +199,6 @@ def main():
     parser.add_argument('--display_port', type=int, default=8001,  help='visdom display port')
     parser.add_argument('--use_html', action='store_true', help='save off html pages')
     parser.add_argument('--checkpoints_dir', type=str, default='checkpoints', help='checkpoints directory')
-    parser.add_argument('--name', type=str, default=train_name, help='directory name for training')
 
     parser.add_argument('--from_scratch', action='store_true', help='model was initialized from scratch')
     parser.add_argument('--train_trunk', action='store_true', help='model trunk was trained/tuned')
@@ -254,14 +250,14 @@ def main():
         else:
             print('Fold %d already exists, skipping...' % fold)
             continue  # skip existing fold
-        Testset = opt.testcsv[1 if target=='mos' else 0]
+        Testset = opt.testcsv[1 if opt.target=="mos" else 0]
         Testset_name, ext = os.path.splitext(Testset)
         Testset = Testset_name + '_k' + str(fold) + ext
         
         data_loader_testSet = dl.CreateDataLoader(Testset,dataset_mode='2afc', Nbpatches= opt.npatches, batch_size=opt.batch_size,
                                                 pin_memory=False, drop_last=False, prefetch_factor=None, nThreads=0,
                                                 src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, cache_root=opt.cache_root,
-                                                target = target) 
+                                                target = opt.target) 
         test_TestSet = Test_TestSet(opt)
         total_steps = 0
         # fid = open(os.path.join(opt.checkpoints_dir,opt.name,'train_log.txt'),'w+')
@@ -280,14 +276,14 @@ def main():
 
         for epoch in range(1, opt.nepoch + opt.nepoch_decay + 1):
                 # Load training data to sample random patches every epoch
-                trainSet = opt.datasets[1 if target=='mos' else 0]
+                trainSet = opt.datasets[1 if opt.target=="mos" else 0]
                 trainSet_name, ext = os.path.splitext(trainSet)
                 trainSet = trainSet_name + '_k' + str(fold) + ext
                 data_loader = dl.CreateDataLoader(trainSet,dataset_mode='2afc', trainset=True, Nbpatches=opt.npatches, 
                                             load_size = load_size, batch_size=opt.batch_size, serial_batches=True, nThreads=opt.nThreads, 
                                                     pin_memory=True, persistent_workers=True, prefetch_factor=2,  # prefetch_factor=2,
                                             src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, cache_root=opt.cache_root,
-                                            target=target)
+                                            target=opt.target)
                 dataset = data_loader.load_data()
                 dataset_size = len(data_loader)
                 D = len(dataset)
