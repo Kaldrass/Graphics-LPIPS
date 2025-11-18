@@ -251,6 +251,9 @@ def main():
         opt.save_dir = os.path.join(opt.checkpoints_dir,opt.name,'fold_k'+str(fold))
         if(not os.path.exists(opt.save_dir)):
             os.mkdir(opt.save_dir)
+        else:
+            print('Fold %d already exists, skipping...' % fold)
+            continue  # skip existing fold
         Testset = opt.testcsv[1 if target=='mos' else 0]
         Testset_name, ext = os.path.splitext(Testset)
         Testset = Testset_name + '_k' + str(fold) + ext
