@@ -3,10 +3,10 @@ import subprocess
 model = 'TMQ_NR_1VP_org_kfolds'#'TMQ_OR_1VP_org'#'GraphicsLPIPS_FinalNetwork'#'TMQ_OR_1VP_org' # 'LPIPS' or 'GraphicsLPIPS'
 use_folds = True
 # ----- Testing parameters -----
-testing_views = 8
-view_method = 'Y_fixed_0.3' # 'Original', 'Fibonacci', 'Y_fixed_0.3' or 'Polyhedron'
+testing_views = 4
+view_method = 'Original' # 'Original', 'Fibonacci', 'Y_fixed_0.3' or 'Polyhedron'
 render_method = 'New_Render' # 'New_Render' or 'Old_render'
-database = 'TSMD' # 'TSMD' or 'BASICS(PC)_DB' or 'TMQ'
+database = 'TMQ' # 'TSMD' or 'BASICS(PC)_DB' or 'TMQ'
 mos_csv_file = r'D:\These\BDD\TSMD\MOS\TSMD_MOS.csv' if database == 'TSMD' \
     else r'D:/These/BDD/TMQ/Collected_Data/MOS+CI_3000stimuli.csv' #r'D:/These/BDD/TMQ/Collected_Data/MOS+CI_3000stimuli.csv',s r'D:\These\BDD\TSMD\MOS\TSMD_MOS.csv'#r"D:\These\BDD\BASICS(PC)_DB\MOS_CI.csv" # Depends on the DATABASE used.
 test_list_csv = r'D:\These\Graphics-LPIPS\dataset\TSMD\TSMD_20%_TestList_scaled.csv' if database == 'TSMD' \

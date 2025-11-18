@@ -17,7 +17,7 @@ from Test_TestSet import Test_TestSet
 from pathlib import Path
 import csv
 import multiprocessing
-
+import train_helpers
 
 
 class CUDAPrefetcher:
@@ -161,12 +161,12 @@ def clear_ssd_cache(cache_root: str, *, remove_root: bool=False, dry_run: bool=F
         "human_freed": _format_bytes(bytes_freed),
     }
 os.environ['PYTHONWARNINGS'] = 'ignore'
-train_name = 'TSMD_NR_8VP_yf03_kfolds'#'TMQ_OR_1VP_org_dbg'
-train_view_nbr = 8
-target = 'mos'#'judges'  # 'mos' or 'judges', for TMQ put judges
-view_method = 'Y_fixed_0.3' # 'Fibonacci', 'Y_fixed_0.3', 'Polyhedron', 'Original'
-render_method = 'New_Render' # 'New_Render' or 'Old_render'
-database = 'TSMD' # 'TSMD' or 'BASICS(PC)_DB' or 'TMQ'
+train_name = train_helpers.train_name
+train_view_nbr = train_helpers.train_view_nbr
+target = train_helpers.target
+view_method = train_helpers.view_method
+render_method = train_helpers.render_method
+database = train_helpers.database
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--datasets', type=str, nargs='+', default=['./dataset/folds/TexturedDB_80%_TrainList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/folds/TSMD_80%_TrainList_scaled.csv'], help='datasets to train on')
@@ -215,14 +215,13 @@ def main():
     if(not os.path.exists(opt.save_dir)):
         os.mkdir(opt.save_dir)
     # initialize model
-    trainer = lpips.Trainer()
-    # trainer.initialize(model=opt.model, net=opt.net, use_gpu=opt.use_gpu, is_train=True, lr=opt.lr,
-    #   pnet_rand=opt.from_scratch, pnet_tune=opt.train_trunk, gpu_ids=opt.gpu_ids)
-    trainer.initialize(model=opt.model, net=opt.net, use_gpu=True, is_train=True, lr=opt.lr,
-        pnet_rand=opt.from_scratch, pnet_tune=opt.train_trunk, gpu_ids=[0])
+    # trainer = lpips.Trainer()
+    # # trainer.initialize(model=opt.model, net=opt.net, use_gpu=opt.use_gpu, is_train=True, lr=opt.lr,
+    # #   pnet_rand=opt.from_scratch, pnet_tune=opt.train_trunk, gpu_ids=opt.gpu_ids)
+    # trainer.initialize(model=opt.model, net=opt.net, use_gpu=True, is_train=True, lr=opt.lr,
+    #     pnet_rand=opt.from_scratch, pnet_tune=opt.train_trunk, gpu_ids=[0])
     # trainer.set_precision_flags(use_amp=False, amp_dtype=None, enable_tf32=False)
     
-    print("Model on:", next(trainer.net.parameters()).device)
     # print("[AMP]", trainer.use_amp, trainer.amp_dtype)
     load_size = 64 # default value is 64
 
@@ -234,6 +233,19 @@ def main():
     ## Looping for the 5 folds in ./dataset/folds/ 
     for fold in range(5):
         print('--- Starting fold k%d ---'%fold)
+        # Re-initialize model for this fold
+        trainer = lpips.Trainer()
+        trainer.initialize(
+            model=opt.model,
+            net=opt.net,
+            use_gpu=True,
+            is_train=True,
+            lr=opt.lr,
+            pnet_rand=opt.from_scratch,
+            pnet_tune=opt.train_trunk,
+            gpu_ids=[0]
+        )
+        print("Model on:", next(trainer.net.parameters()).device)
         # testSet is TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv. For each fold, we modify the name : 
         # TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6_k${i}.csv
         opt.save_dir = os.path.join(opt.checkpoints_dir,opt.name,'fold_k'+str(fold))

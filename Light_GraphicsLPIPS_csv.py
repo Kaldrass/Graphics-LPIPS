@@ -49,7 +49,7 @@ if (config.use_folds):
         if config.database == 'TMQ':
             test_list_csv_fold = './dataset/folds/' + config.test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
         else: 
-            test_list_csv_fold = './dataset/TSMD/folds/' + config.test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
+            test_list_csv_fold = './dataset/TSMD/_TSMD_fulldataset.csv'#'./dataset/TSMD/folds/' + config.test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
             
         ref_obj_list_folds.append(correlation_VP.get_testset_ref_list(test_list_csv_fold))
         # the model is also different
@@ -82,11 +82,12 @@ for fold_idx, ref_obj_list in enumerate(ref_obj_list_folds):
     loss_fn = lpips.LPIPS(net='alex',version=opt.version, model_path = model_folds[fold_idx])# e.g. model_path = './checkpoints/Trial1/latest_net_.pth'
     if(opt.use_gpu):
         loss_fn.cuda()
-    
-    # sd = loss_fn.state_dict()
-    # print("CKPT loaded keys:", len(sd))
-    # for k in ["lins.0.model.1.weight","net.slice1.0.weight"]:
-    #     if k in sd: print(k, float(sd[k].abs().sum()))
+    sd = loss_fn.state_dict()
+    # print("Fold", fold_idx, "sum weights:", sum(v.abs().sum().item() for v in sd.values()))
+    sd = loss_fn.state_dict()
+    print("CKPT loaded keys:", len(sd))
+    for k in ["lins.0.model.1.weight","net.slice1.0.weight"]:
+        if k in sd: print(k, float(sd[k].abs().sum()))
     ## Output file
     #If the file already exists, we delete it
     # else we create it
@@ -216,6 +217,7 @@ for fold_idx, ref_obj_list in enumerate(ref_obj_list_folds):
                     file_GLPIPS.writelines(', ')
             file_GLPIPS.writelines('\n')
         file_GLPIPS.close()
+        
     #     Graphicslpips = sum(res)/len(res)
     #     List_GraphicsLPIPS.append(Graphicslpips)
     #     # List_MOS.append(float(MOS))
