@@ -19,50 +19,67 @@ from statistics import mean
 from decimal import Decimal
 import find_dis_ref
 import correlation_VP
-import config
 import re
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('-f','--csvfile', type=str, default='./dataset/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv')
-parser.add_argument('-m','--modelpath', type=str, default='./checkpoints/'+ config.model +'/latest_net_.pth', help='location of model')
-parser.add_argument('-o','--out', type=str, default='./out/' + config.database + '/' + config.render_method + '/' + config.view_method + '/' + config.model + '/' + str(config.testing_views) + 'VP/', help='output folder. Do not forget to add the name of the database and end with \'/\'.')
-parser.add_argument('-v','--version', type=str, default='0.1')
-parser.add_argument('--use_gpu', action='store_true', default=True, help='turn on flag to use GPU')
 
+parser.add_argument('--use_gpu', action='store_true', default=True, help='turn on flag to use GPU')
+parser.add_argument('--version', type=str, default='0.1')
+parser.add_argument('-m', '--model', type=str, required=True)
+parser.add_argument('-use_folds', type=bool, required=True)
+parser.add_argument('-v', '--views', type=int, required=True)
+parser.add_argument('-vm', '--view_method', type=str, required=True)
+parser.add_argument('-rm', '--render_method', type=str, required=True)
+parser.add_argument('-db', '--database', type=str, required=True)
+parser.add_argument('-mos', '--mos_csv_file', type=str, required=True)
+parser.add_argument('-testlist', '--test_list_csv', type=str, required=True)
+opt = parser.parse_args()
+
+model = opt.model
+modelpath = './checkpoints/'+ model +'/latest_net_.pth'
+use_folds = opt.use_folds
+testing_views = opt.views
+view_method = opt.view_method
+render_method = opt.render_method
+database = opt.database
+mos_csv_file = opt.mos_csv_file
+test_list_csv = opt.test_list_csv
 opt = parser.parse_args() 
 force_overwrite = False # If the file already exists, we will overwrite it. If False, we will not overwrite it.
+out = './out/' + database + '/' + render_method + '/' + view_method + '/' + model + '/' + str(testing_views) + 'VP/'
 # ------------------------------- DEBUG VARIABLES -------------------------------
-root_refPatches = 'D:/These/Projets/CompareMetrics/out/' + config.database + '/' + config.render_method + '/' + config.view_method + '/Source/' + str(config.testing_views) + 'VP/' 
-root_disPatches = 'D:/These/Projets/CompareMetrics/out/' + config.database + '/' + config.render_method + '/' + config.view_method + '/Distorted/' + str(config.testing_views) + 'VP/'
+root_refPatches = 'D:/These/Projets/CompareMetrics/out/' + database + '/' + render_method + '/' + view_method + '/Source/' + str(testing_views) + 'VP/' 
+root_disPatches = 'D:/These/Projets/CompareMetrics/out/' + database + '/' + render_method + '/' + view_method + '/Distorted/' + str(testing_views) + 'VP/'
 ext = '.png'
-# The 20% is the one that is used in the config.test_list_csv file.
+# The 20% is the one that is used in the test_list_csv file.
 # ref_obj_list = find_dis_ref.find_ref_files(root_refPatches)
-if (config.use_folds):
+if (use_folds):
     # there are  folds in the test list csv file. Names are like TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6_k0.csv, TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6_k1.csv, ...
     ref_obj_list_folds = []
     model_folds = []
     output_folds = []
     for fold in range(5):
-        # ref_obj_list = correlation_VP.get_testset_ref_list(config.test_list_csv) # We will take the reference objects from the CSV file. The function 'get_ref_obj_list' will return a list of the reference objects.
+        # ref_obj_list = correlation_VP.get_testset_ref_list(test_list_csv) # We will take the reference objects from the CSV file. The function 'get_ref_obj_list' will return a list of the reference objects.
         # For folds, we transform 
         # './dataset/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv' into './dataset/folds/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6_k${fold}.csv'
-        if config.database == 'TMQ':
-            test_list_csv_fold = './dataset/folds/' + config.test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
+        if database == "TMQ":
+            test_list_csv_fold = './dataset/folds/' + test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
         else: 
-            test_list_csv_fold = './dataset/TSMD/_TSMD_fulldataset.csv'#'./dataset/TSMD/folds/' + config.test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
+            test_list_csv_fold = './dataset/TSMD/_TSMD_fulldataset.csv'#'./dataset/TSMD/folds/' + test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
             
+        print("Using test list CSV file for fold %d: %s" % (fold, test_list_csv_fold))
         ref_obj_list_folds.append(correlation_VP.get_testset_ref_list(test_list_csv_fold))
         # the model is also different
         # e.g. : './checkpoints/TMQ_NR_1VP_org_TAA/fold_k0/latest_net_.pth'
-        model_folds.append('./checkpoints/' + config.model + '/fold_k' + str(fold) + '/latest_net_.pth')
+        model_folds.append('./checkpoints/' + model + '/fold_k' + str(fold) + '/latest_net_.pth')
         # Modifying the output folder to add the fold number
-        output_folds.append(opt.out + 'fold_k' + str(fold) + '/')
+        output_folds.append(out + 'fold_k' + str(fold) + '/')
         
 else:
-    ref_obj_list_folds = [correlation_VP.get_testset_ref_list(config.test_list_csv)]
-    model_folds = [opt.modelpath]
-    print("Avaluating the testset with %s model" % (config.model))
-    output_folds = [opt.out]
+    ref_obj_list_folds = [correlation_VP.get_testset_ref_list(test_list_csv)]
+    model_folds = [modelpath]
+    print("Avaluating the testset with %s model" % (model))
+    output_folds = [out]
 
 
 # patches_csv_list = find_dis_ref.find_ref_csvfiles(root_refPatches)
@@ -70,7 +87,7 @@ else:
 
 
 
-# loss_fn = lpips.LPIPS(net='alex', version=opt.version, model_path=opt.modelpath)
+# loss_fn = lpips.LPIPS(net='alex', version=opt.version, model_path=modelpath)
 # if opt.use_gpu:
 #     loss_fn = loss_fn.cuda()
 # loss_fn.eval()
@@ -130,17 +147,18 @@ for fold_idx, ref_obj_list in enumerate(ref_obj_list_folds):
             # f = open(outcsvfile,'w')
             
             dis_views_folder = root_disPatches + '/' + distorted_obj + '/views'
-            csv_patch_file = find_dis_ref.find_ref_csvfiles(root_refPatches + '/' + ref_obj)[0]
+            # print("find dis ref : ", root_refPatches  + ref_obj)
+            csv_patch_file = find_dis_ref.find_ref_csvfiles(root_refPatches + ref_obj)[0]
 
             ###--------------------DEBUG START--------------------###
-            # if(correlation_VP.get_MOS(config.mos_csv_file, distorted_obj, 2, 3) == -1): 
-            # # if(correlation_VP.get_test_MOS(config.test_list_csv, distorted_obj) == -1): # ONLY FOR TMQ 
+            # if(correlation_VP.get_MOS(mos_csv_file, distorted_obj, 2, 3) == -1): 
+            # # if(correlation_VP.get_test_MOS(test_list_csv, distorted_obj) == -1): # ONLY FOR TMQ 
             #     print('[DEBUG] The object %s is not in the MOS file. We will skip it.' % distorted_obj)
             #     continue
             ###---------------------DEBUG END---------------------###
             # Creating the output csv file for the distorted object
-            List_MOS.append([correlation_VP.get_MOS(config.mos_csv_file, distorted_obj, name_col = 0, mos_col = 1)]) # WARNING : MOS_COL and NAME_COL needs to be specified correctly
-            # List_MOS.append([correlation_VP.get_test_MOS(config.test_list_csv, distorted_obj)])
+            List_MOS.append([correlation_VP.get_MOS(mos_csv_file, distorted_obj, name_col = 0, mos_col = 1)]) # WARNING : MOS_COL and NAME_COL needs to be specified correctly
+            # List_MOS.append([correlation_VP.get_test_MOS(test_list_csv, distorted_obj)])
 
             with open(csv_patch_file) as csv_file:
                 csv_reader = csv.reader(csv_file, delimiter=',')
