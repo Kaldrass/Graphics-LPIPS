@@ -62,11 +62,13 @@ if (use_folds):
         # ref_obj_list = correlation_VP.get_testset_ref_list(test_list_csv) # We will take the reference objects from the CSV file. The function 'get_ref_obj_list' will return a list of the reference objects.
         # For folds, we transform 
         # './dataset/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv' into './dataset/folds/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6_k${fold}.csv'
-        if database == "TMQ":
-            test_list_csv_fold = './dataset/folds/' + test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
+        if model.startswith(database) or (model.startswith('GraphicsLPIPS') and database=='TMQ'):
+            test_list_csv_fold = './dataset/' + database + '/folds/' + test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
+        
         else: 
-            test_list_csv_fold = './dataset/TSMD/_TSMD_fulldataset.csv'#'./dataset/TSMD/folds/' + test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
+            test_list_csv_fold = test_list_csv#'./dataset/TSMD/folds/' + test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
             
+        # test_list_csv_fold = re.sub(r'(_k\d+)?\.csv$', f'_k{fold}.csv', test_list_csv.replace('\\', '/'))            
         print("Using test list CSV file for fold %d: %s" % (fold, test_list_csv_fold))
         ref_obj_list_folds.append(correlation_VP.get_testset_ref_list(test_list_csv_fold))
         # the model is also different

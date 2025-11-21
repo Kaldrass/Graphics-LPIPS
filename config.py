@@ -55,6 +55,15 @@ if __name__ == "__main__":
            '-mos', mos_csv_file,
            '-testlist', test_list_csv,
     ]
+    cmd2 = [
+           'python', 'correlation_VP.py',
+           '-m', model,
+           '-use_folds', str(use_folds),
+           '-v', str(testing_views),
+           '-vm', view_method,
+           '-rm', render_method,
+           '-db', database,
+    ]
     subprocess.run(cmd, check=True, text=True)
-    # corrvp = subprocess.run(['python', 'correlation_VP.py'], check=True, text=True)
+    subprocess.run(cmd2, check=True, text=True)
 

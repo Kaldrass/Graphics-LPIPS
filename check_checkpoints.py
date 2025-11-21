@@ -1,9 +1,8 @@
 # check_checkpoints.py
 import os
 import hashlib
-import config  # ton fichier config.py
 
-base = "./checkpoints/" + config.model
+base = "./checkpoints/TMQ_NR_1VP_org_kfolds"
 
 for fold in range(5):
     path = os.path.join(base, f"fold_k{fold}", "latest_net_.pth")
