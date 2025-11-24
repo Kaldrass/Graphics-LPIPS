@@ -1,9 +1,0 @@
-Object,Pearson,Spearman,Slope,CI_slope_lower,CI_slope_upper,Intercept,R2
-butterflies_collection,0.9837,1.0,5.8575,-4.3574,16.0725,-2.7153
-cyber_samurai,0.9964,1.0,9.7661,-7.4116,26.9439,-2.0988
-grey_knight,0.9597,1.0,6.704,-5.7551,19.1631,-2.7486
-levi_fr00000,0.9937,1.0,12.1825,-13.033,37.3981,-4.1452
-orbiter_space_shutter,0.968,0.9,8.9357,-12.3138,30.1852,-0.7561
-wiz_boots,0.9808,1.0,4.7703,-3.6395,13.1802,-1.9469
-wooden_gramophone,0.9976,1.0,6.5646,-5.8803,19.0095,-1.7261
-zakopane_chair,0.9833,1.0,7.671,-6.0562,21.3982,-2.131

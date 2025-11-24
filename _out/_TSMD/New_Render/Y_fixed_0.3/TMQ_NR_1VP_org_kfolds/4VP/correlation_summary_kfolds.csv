@@ -1,2 +1,0 @@
-batchname,model,database,render_method,view_method,testing_views,n_folds,pearson_mean
-TMQ_NR_1VP_org_kfolds_TSMD_New_Render_Y_fixed_0.3_4VP,TMQ_NR_1VP_org_kfolds,TSMD,New_Render,Y_fixed_0.3,4,5,0.8807

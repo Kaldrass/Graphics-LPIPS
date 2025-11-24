@@ -1,2 +1,0 @@
-batchname,model,database,render_method,view_method,testing_views,n_folds,pearson_mean
-TMQ_NR_4VP_org_kfolds_TMQ_New_Render_Original_1VP,TMQ_NR_4VP_org_kfolds,TMQ,New_Render,Original,1,5,0.8236

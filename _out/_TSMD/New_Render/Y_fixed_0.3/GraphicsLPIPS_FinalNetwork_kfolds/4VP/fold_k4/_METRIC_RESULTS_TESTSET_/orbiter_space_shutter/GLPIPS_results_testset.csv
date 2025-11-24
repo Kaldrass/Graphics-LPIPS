@@ -1,6 +1,0 @@
-ObjectName, MOS, LPIPS
-orbiter_space_shutter_dec0.20_qp10_qt9_cqlevel_63, 1.54, 0.388734, 0.420999, 0.340941, 0.340406
-orbiter_space_shutter_dec0.20_qp9_qt8_cqlevel_63, 1.58, 0.511955, 0.509775, 0.408058, 0.414728
-orbiter_space_shutter_dec0.30_qp11_qt10_cqlevel_63, 2.15, 0.240992, 0.259541, 0.209266, 0.142877
-orbiter_space_shutter_dec0.80_qp11_qt10_cqlevel_63, 2.68, 0.167286, 0.160330, 0.153339, 0.068294
-orbiter_space_shutter_dec1.00_qp13_qt12_cqlevel_53, 3.68, 0.065170, 0.064381, 0.064496, 0.025715

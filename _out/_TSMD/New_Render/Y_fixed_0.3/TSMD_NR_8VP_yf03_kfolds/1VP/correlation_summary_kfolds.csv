@@ -1,2 +1,0 @@
-batchname,model,database,render_method,view_method,testing_views,n_folds,pearson_mean
-TSMD_NR_8VP_yf03_kfolds_TSMD_New_Render_Y_fixed_0.3_1VP,TSMD_NR_8VP_yf03_kfolds,TSMD,New_Render,Y_fixed_0.3,1,5,0.8709

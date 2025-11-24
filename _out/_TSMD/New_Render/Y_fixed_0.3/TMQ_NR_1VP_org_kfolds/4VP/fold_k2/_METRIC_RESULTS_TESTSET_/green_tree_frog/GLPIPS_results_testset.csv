@@ -1,6 +1,0 @@
-ObjectName, MOS, LPIPS
-green_tree_frog_dec0.10_qp9_qt8_cqlevel_63, 1.11, 0.848514, 0.878964, 0.899780, 0.933584
-green_tree_frog_dec0.20_qp10_qt9_cqlevel_63, 1.26, 0.822162, 0.843599, 0.838269, 0.896454
-green_tree_frog_dec1.00_qp10_qt9_cqlevel_63, 1.82, 0.350479, 0.419430, 0.581298, 0.470408
-green_tree_frog_dec1.00_qp11_qt10_cqlevel_58, 2.76, 0.160264, 0.137919, 0.223266, 0.153021
-green_tree_frog_dec1.00_qp13_qt12_cqlevel_33, 4.46, 0.019103, 0.013924, 0.017382, 0.011886
