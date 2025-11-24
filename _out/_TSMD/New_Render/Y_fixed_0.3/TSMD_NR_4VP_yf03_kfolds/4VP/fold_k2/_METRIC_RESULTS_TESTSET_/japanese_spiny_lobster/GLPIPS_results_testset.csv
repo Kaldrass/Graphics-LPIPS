@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+japanese_spiny_lobster_dec0.10_qp10_qt9_cqlevel_63, 1.27, 0.879163, 0.800485, 0.868857, 0.817567
+japanese_spiny_lobster_dec0.10_qp8_qt7_cqlevel_63, 1.06, 1.000000, 0.938272, 0.989990, 0.966616
+japanese_spiny_lobster_dec1.00_qp10_qt9_cqlevel_63, 2.30, 0.706938, 0.634417, 0.687600, 0.680808
+japanese_spiny_lobster_dec1.00_qp11_qt10_cqlevel_58, 4.14, 0.370686, 0.314282, 0.262371, 0.320828
+japanese_spiny_lobster_dec1.00_qp12_qt11_cqlevel_43, 4.50, 0.101637, 0.068314, 0.052025, 0.075939

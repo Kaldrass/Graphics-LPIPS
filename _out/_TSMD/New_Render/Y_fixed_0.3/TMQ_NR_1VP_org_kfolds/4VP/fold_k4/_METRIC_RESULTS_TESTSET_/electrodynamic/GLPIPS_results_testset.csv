@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+electrodynamic_dec0.10_qp10_qt9_cqlevel_53, 3.42, 0.179239, 0.261603, 0.288439, 0.249092
+electrodynamic_dec0.10_qp12_qt11_cqlevel_53, 3.35, 0.174999, 0.256892, 0.277594, 0.233678
+electrodynamic_dec0.10_qp7_qt6_cqlevel_63, 1.19, 0.692438, 0.851979, 0.886205, 0.795300
+electrodynamic_dec0.10_qp8_qt7_cqlevel_63, 1.86, 0.374661, 0.528745, 0.631063, 0.540560
+electrodynamic_dec0.30_qp12_qt11_cqlevel_43, 4.03, 0.089124, 0.123399, 0.142399, 0.075208

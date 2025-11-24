@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+sakura_cherry_blossom_dec0.10_qp9_qt8_cqlevel_63, 1.26, 0.992268, 0.983916, 0.996065, 0.971641
+sakura_cherry_blossom_dec0.30_qp10_qt9_cqlevel_63, 1.31, 0.916213, 0.845868, 0.919374, 0.816050
+sakura_cherry_blossom_dec1.00_qp10_qt9_cqlevel_63, 1.68, 0.801313, 0.735678, 0.774778, 0.682419
+sakura_cherry_blossom_dec1.00_qp11_qt10_cqlevel_58, 2.28, 0.336216, 0.294137, 0.349984, 0.287947
+sakura_cherry_blossom_dec1.00_qp13_qt12_cqlevel_33, 4.17, 0.024854, 0.018582, 0.028397, 0.025365

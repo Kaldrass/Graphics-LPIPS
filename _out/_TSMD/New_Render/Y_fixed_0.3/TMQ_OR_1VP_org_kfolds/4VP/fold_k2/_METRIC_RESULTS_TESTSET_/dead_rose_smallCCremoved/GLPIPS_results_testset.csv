@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+dead_rose_smallCCremoved_dec0.10_qp6_qt5_cqlevel_63, 1.18, 0.978103, 0.936941, 0.953930, 0.938128
+dead_rose_smallCCremoved_dec0.20_qp8_qt7_cqlevel_63, 2.00, 0.795182, 0.748640, 0.646655, 0.751644
+dead_rose_smallCCremoved_dec0.30_qp10_qt9_cqlevel_58, 2.92, 0.596148, 0.530304, 0.410995, 0.547735
+dead_rose_smallCCremoved_dec0.60_qp12_qt11_cqlevel_53, 3.59, 0.426799, 0.398761, 0.290703, 0.407150
+dead_rose_smallCCremoved_dec1.00_qp12_qt11_cqlevel_43, 4.03, 0.333814, 0.315748, 0.251571, 0.348458

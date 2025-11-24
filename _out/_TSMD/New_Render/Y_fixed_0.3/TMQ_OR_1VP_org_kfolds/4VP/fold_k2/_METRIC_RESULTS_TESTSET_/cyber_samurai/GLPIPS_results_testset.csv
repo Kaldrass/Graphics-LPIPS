@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+cyber_samurai_dec0.10_qp10_qt9_cqlevel_63, 3.50, 0.305281, 0.261747, 0.222874, 0.258914
+cyber_samurai_dec0.10_qp7_qt6_cqlevel_63, 1.26, 0.770014, 0.604287, 0.681747, 0.653873
+cyber_samurai_dec0.10_qp8_qt7_cqlevel_63, 1.89, 0.485389, 0.482032, 0.379282, 0.479051
+cyber_samurai_dec0.20_qp11_qt10_cqlevel_63, 4.08, 0.147441, 0.126621, 0.164121, 0.138472
+cyber_samurai_dec0.80_qp13_qt12_cqlevel_43, 4.39, 0.041778, 0.040601, 0.064493, 0.036557

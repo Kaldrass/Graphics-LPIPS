@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+grey_knight_dec0.10_qp6_qt5_cqlevel_63, 1.45, 0.838390, 0.854613, 0.831574, 0.855220
+grey_knight_dec0.10_qp9_qt8_cqlevel_63, 3.19, 0.539995, 0.672618, 0.522424, 0.530130
+grey_knight_dec0.60_qp11_qt10_cqlevel_63, 3.24, 0.341237, 0.497711, 0.306865, 0.326470
+grey_knight_dec0.60_qp12_qt11_cqlevel_58, 4.16, 0.248792, 0.389831, 0.227256, 0.209374
+grey_knight_dec1.00_qp12_qt11_cqlevel_43, 4.66, 0.169346, 0.246437, 0.163707, 0.123288

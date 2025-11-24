@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+heliostat_dec0.10_qp10_qt9_cqlevel_63, 3.15, 0.199238, 0.368152, 0.290927, 0.298343
+heliostat_dec0.10_qp11_qt10_cqlevel_58, 3.72, 0.084429, 0.229103, 0.148985, 0.110929
+heliostat_dec0.10_qp7_qt6_cqlevel_63, 1.22, 0.947055, 0.975127, 0.977849, 0.982259
+heliostat_dec0.10_qp8_qt7_cqlevel_63, 1.91, 0.584016, 0.716674, 0.747285, 0.730062
+heliostat_dec0.40_qp13_qt12_cqlevel_38, 4.09, 0.021732, 0.058752, 0.031585, 0.029946

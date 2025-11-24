@@ -1,0 +1,8 @@
+Object,Pearson,Spearman,Slope,CI_slope_lower,CI_slope_upper,Intercept,R2
+dead_rose_smallCCremoved,0.9969,1.0,6.1832,-5.7943,18.1607,-2.91
+electrodynamic,0.9972,0.9,6.8762,-6.6216,20.374,-2.0643
+frederic_fr00001,0.9772,1.0,6.7748,-8.3328,21.8823,-1.0836
+green_tree_frog,0.9667,1.0,4.7566,-3.5742,13.0875,-1.2044
+heilig_grab_kapelle,0.9881,1.0,6.4887,-4.9881,17.9655,-1.9568
+heliostat,0.9987,1.0,4.5062,-3.9951,13.0076,-1.2536
+hussar_on_horseback,0.9964,1.0,6.2666,-5.6881,18.2213,-1.2857

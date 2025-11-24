@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+armillary_sphere_1771_dec0.10_qp10_qt9_cqlevel_63, 1.68, 0.553646, 0.526923, 0.578715, 0.538437
+armillary_sphere_1771_dec0.10_qp7_qt6_cqlevel_63, 1.08, 0.910121, 0.877281, 0.864263, 0.850193
+armillary_sphere_1771_dec0.10_qp8_qt7_cqlevel_63, 1.33, 0.656265, 0.644216, 0.674521, 0.624749
+armillary_sphere_1771_dec0.20_qp11_qt10_cqlevel_48, 3.11, 0.288670, 0.248240, 0.258480, 0.241939
+armillary_sphere_1771_dec0.40_qp12_qt11_cqlevel_38, 3.76, 0.160541, 0.134041, 0.142560, 0.126930

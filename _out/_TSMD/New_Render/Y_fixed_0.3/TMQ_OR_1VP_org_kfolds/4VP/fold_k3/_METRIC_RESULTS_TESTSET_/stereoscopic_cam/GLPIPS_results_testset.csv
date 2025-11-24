@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+stereoscopic_cam_dec0.10_qp11_qt10_cqlevel_58, 2.39, 0.853864, 0.931566, 0.916707, 0.884983
+stereoscopic_cam_dec0.10_qp7_qt6_cqlevel_63, 1.16, 0.992129, 0.998336, 0.998860, 0.984835
+stereoscopic_cam_dec0.10_qp9_qt8_cqlevel_63, 1.55, 0.953751, 0.982426, 0.987199, 0.939221
+stereoscopic_cam_dec0.20_qp12_qt11_cqlevel_53, 3.05, 0.729215, 0.728644, 0.670781, 0.678460
+stereoscopic_cam_dec1.00_qp12_qt11_cqlevel_43, 4.08, 0.238944, 0.254295, 0.201188, 0.227515

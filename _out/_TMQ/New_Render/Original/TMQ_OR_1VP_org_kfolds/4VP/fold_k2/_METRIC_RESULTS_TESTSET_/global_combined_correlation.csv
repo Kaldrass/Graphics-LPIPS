@@ -1,0 +1,12 @@
+Object,Pearson,Spearman,Slope,CI_slope_lower,CI_slope_upper,Intercept,R2
+bear,0.9116,0.8838,5.1702,2.1787,8.1618,-2.9036
+bronzeCat,0.3604,0.2455,2.3135,-2.1256,6.7526,-1.4465
+Deity_Earring_with_Vishnu_Garuda_and_chepu_100K,0.9212,0.9279,4.4739,0.2262,8.7216,-2.6525
+Doryphoros_HighRes_4Mfaces_Simplified_BakedUV,0.7116,0.7482,2.654,-0.5322,5.8403,-0.3208
+Elephant_zun_bakedUV,0.9014,0.8944,5.1291,1.0487,9.2094,-2.598
+Emberiza_calandra2,0.7796,0.7066,4.9107,0.3168,9.5046,-3.0376
+ET26_L_MK1,0.8498,0.8273,3.5134,-3.2053,10.2321,-2.6556
+Harrison_Front_Parlor_ChairSimplified,0.7042,0.6733,5.3374,0.9737,9.7011,-2.3077
+model_Pastries_20180129_111506950,0.8331,0.8111,4.9497,1.0497,8.8496,-2.5869
+rescue_craft,0.8134,0.7863,3.8068,0.3618,7.2519,-2.1894
+SitzenderKnabeNC,0.9485,0.9253,6.3849,1.9112,10.8586,-2.9205

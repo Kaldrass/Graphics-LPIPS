@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+just_a_girl_dec0.10_qp6_qt5_cqlevel_63, 1.24, 0.948368, 0.955142, 0.989425, 0.990427
+just_a_girl_dec0.20_qp9_qt8_cqlevel_63, 2.40, 0.676727, 0.677070, 0.687748, 0.647103
+just_a_girl_dec0.40_qp10_qt9_cqlevel_63, 3.44, 0.525080, 0.476020, 0.463930, 0.559863
+just_a_girl_dec0.60_qp11_qt10_cqlevel_58, 4.32, 0.296132, 0.244362, 0.232257, 0.235840
+just_a_girl_dec1.00_qp13_qt12_cqlevel_43, 4.66, 0.156734, 0.116783, 0.109284, 0.109912

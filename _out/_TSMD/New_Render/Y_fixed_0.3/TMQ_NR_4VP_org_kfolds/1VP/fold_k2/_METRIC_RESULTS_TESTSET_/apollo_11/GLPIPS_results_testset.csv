@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+apollo_11_dec0.10_qp7_qt6_cqlevel_63, 1.13, 0.971308
+apollo_11_dec0.10_qp9_qt8_cqlevel_63, 1.32, 0.896703
+apollo_11_dec1.00_qp11_qt10_cqlevel_53, 2.74, 0.655425
+apollo_11_dec1.00_qp13_qt12_cqlevel_33, 3.54, 0.264255
+apollo_11_dec1.00_qp13_qt12_cqlevel_43, 3.29, 0.486934

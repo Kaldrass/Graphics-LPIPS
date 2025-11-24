@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+marble_mortar_dec0.10_qp10_qt9_cqlevel_53, 2.41, 0.833232, 0.831605, 0.736900, 0.434439
+marble_mortar_dec0.10_qp6_qt5_cqlevel_63, 1.24, 0.951000, 0.960227, 0.908484, 0.830125
+marble_mortar_dec0.10_qp8_qt7_cqlevel_63, 1.82, 0.884057, 0.924250, 0.833015, 0.657267
+marble_mortar_dec0.40_qp11_qt10_cqlevel_38, 3.53, 0.482246, 0.295669, 0.300973, 0.122703
+marble_mortar_dec0.60_qp12_qt11_cqlevel_33, 3.84, 0.274523, 0.189167, 0.166669, 0.074054

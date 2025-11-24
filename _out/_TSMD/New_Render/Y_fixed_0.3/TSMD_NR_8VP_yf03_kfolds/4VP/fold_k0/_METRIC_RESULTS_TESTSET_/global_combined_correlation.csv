@@ -1,0 +1,8 @@
+Object,Pearson,Spearman,Slope,CI_slope_lower,CI_slope_upper,Intercept,R2
+apollo_11,0.9434,1.0,5.3911,-5.0029,15.785,-2.6362
+apothecary_vase,0.9636,1.0,3.7762,-4.7852,12.3375,-1.6224
+armillary_sphere_1771,0.9989,1.0,6.3262,-5.1756,17.828,-1.699
+buste_cuirasse_de_marc_aurele_age,0.9767,1.0,12.1677,-17.0446,41.38,-2.1123
+candle_stick,0.9923,1.0,5.8371,-4.7211,16.3952,-2.0461
+cela_ruins_of_a_nuns_cell,0.9682,1.0,4.1039,-4.7022,12.91,-1.2624
+creature_box_squid,0.983,1.0,6.5911,-5.3147,18.4969,-2.0652

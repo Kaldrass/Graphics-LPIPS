@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+mira_w_gun_dec0.10_qp7_qt6_cqlevel_63, 1.81, 0.685097
+mira_w_gun_dec0.20_qp10_qt9_cqlevel_63, 2.92, 0.323392
+mira_w_gun_dec0.30_qp10_qt9_cqlevel_63, 3.05, 0.238678
+mira_w_gun_dec1.00_qp11_qt10_cqlevel_63, 3.89, 0.157084
+mira_w_gun_dec1.00_qp12_qt11_cqlevel_58, 4.28, 0.120256

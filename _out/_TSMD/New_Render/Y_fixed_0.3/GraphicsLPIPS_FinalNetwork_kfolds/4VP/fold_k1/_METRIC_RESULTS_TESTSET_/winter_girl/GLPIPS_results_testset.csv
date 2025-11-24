@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+winter_girl_dec0.10_qp7_qt6_cqlevel_63, 1.26, 0.957243, 0.962524, 0.964045, 0.949661
+winter_girl_dec0.20_qp8_qt7_cqlevel_63, 2.17, 0.872107, 0.881837, 0.823797, 0.781698
+winter_girl_dec0.40_qp10_qt9_cqlevel_63, 3.32, 0.520902, 0.602290, 0.509041, 0.476284
+winter_girl_dec0.60_qp11_qt10_cqlevel_63, 3.77, 0.445502, 0.519380, 0.441447, 0.384414
+winter_girl_dec0.80_qp14_qt13_cqlevel_48, 4.00, 0.211035, 0.244379, 0.215209, 0.237374

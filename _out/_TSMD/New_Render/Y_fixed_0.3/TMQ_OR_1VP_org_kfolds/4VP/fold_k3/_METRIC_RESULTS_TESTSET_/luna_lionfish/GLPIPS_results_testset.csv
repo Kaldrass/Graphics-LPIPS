@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+luna_lionfish_dec1.00_qp10_qt9_cqlevel_63, 1.66, 0.538807, 0.584114, 0.781079, 0.627517
+luna_lionfish_dec1.00_qp11_qt10_cqlevel_53, 2.76, 0.204849, 0.193382, 0.262811, 0.233552
+luna_lionfish_dec1.00_qp11_qt10_cqlevel_63, 2.25, 0.274419, 0.339984, 0.465589, 0.400461
+luna_lionfish_dec1.00_qp12_qt11_cqlevel_58, 3.28, 0.133592, 0.156183, 0.220546, 0.178310
+luna_lionfish_dec1.00_qp13_qt12_cqlevel_48, 3.90, 0.081892, 0.077947, 0.101786, 0.088540

@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+candle_stick_dec0.10_qp10_qt9_cqlevel_58, 3.45, 0.192375, 0.169236, 0.129363, 0.314482
+candle_stick_dec0.10_qp7_qt6_cqlevel_63, 1.27, 0.658992, 0.837143, 0.671070, 0.821528
+candle_stick_dec0.10_qp9_qt8_cqlevel_63, 2.85, 0.348137, 0.295309, 0.250792, 0.560555
+candle_stick_dec0.20_qp11_qt10_cqlevel_48, 4.37, 0.052585, 0.076333, 0.050178, 0.105765
+candle_stick_dec0.40_qp13_qt12_cqlevel_38, 4.59, 0.012402, 0.017951, 0.012135, 0.036958

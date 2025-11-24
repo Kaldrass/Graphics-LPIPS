@@ -1,0 +1,2 @@
+batchname,model,database,render_method,view_method,testing_views,n_folds,pearson_mean
+GraphicsLPIPS_FinalNetwork_kfolds_TMQ_New_Render_Original_1VP,GraphicsLPIPS_FinalNetwork_kfolds,TMQ,New_Render,Original,1,5,0.806

@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+piggy_bank_dec0.10_qp12_qt11_cqlevel_58, 2.79, 0.419545, 0.424884, 0.359730, 0.505689
+piggy_bank_dec0.10_qp7_qt6_cqlevel_63, 1.04, 0.824187, 0.807178, 0.873731, 0.859502
+piggy_bank_dec0.10_qp9_qt8_cqlevel_63, 1.54, 0.573699, 0.644387, 0.504863, 0.673576
+piggy_bank_dec0.20_qp13_qt12_cqlevel_53, 3.68, 0.323602, 0.283291, 0.240344, 0.322782
+piggy_bank_dec0.60_qp13_qt12_cqlevel_38, 4.68, 0.098037, 0.058648, 0.075237, 0.065513

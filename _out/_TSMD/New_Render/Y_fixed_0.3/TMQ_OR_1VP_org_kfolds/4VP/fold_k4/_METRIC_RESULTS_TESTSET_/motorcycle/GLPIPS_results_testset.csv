@@ -1,0 +1,6 @@
+ObjectName, MOS, LPIPS
+motorcycle_dec0.10_qp6_qt5_cqlevel_63, 1.40, 0.810789, 0.935454, 0.829643, 0.828388
+motorcycle_dec0.10_qp8_qt7_cqlevel_63, 2.08, 0.535984, 0.701740, 0.445062, 0.623772
+motorcycle_dec0.20_qp9_qt8_cqlevel_63, 2.79, 0.294301, 0.470923, 0.302255, 0.362113
+motorcycle_dec0.40_qp10_qt9_cqlevel_58, 4.00, 0.134530, 0.149078, 0.153440, 0.136279
+motorcycle_dec0.60_qp12_qt11_cqlevel_43, 4.42, 0.070057, 0.098185, 0.074294, 0.068948
