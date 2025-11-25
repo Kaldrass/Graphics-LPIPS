@@ -1,4 +1,5 @@
 out/
+checkpoints/
 *.png
 *.htm
 *.html
