@@ -1,4 +1,5 @@
 import os
+import re
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -8,12 +9,7 @@ import seaborn as sns
 # 0. Paths / configuration
 # ============================
 
-# Root directory that contains all experiment subfolders
-# Example structure:
-# D:/These/Graphics-LPIPS/out/TMQ/New_Render/Original/TMQ_NR_4VP_org_kfolds/4VP/correlation_summary_kfolds.csv
 BASE_RESULTS_DIR = r"D:\These\Graphics-LPIPS\out"
-
-# Name of the recap file written by correlation_VP.py
 SUMMARY_FILENAME = "correlation_summary_kfolds.csv"
 
 # Column to use for the heatmaps (PLCC = Pearson)
@@ -38,47 +34,100 @@ def load_correlation_summaries(root_dir, summary_filename=SUMMARY_FILENAME):
     return summary
 
 
+# ============================
+# 2. Alias helpers
+# ============================
+
 def training_alias_from_model(model):
-    """Map model name (training config) to a short alias used in the heatmaps."""
+    """
+    Map model name (training config) to a short alias:
+      Example model names:
+        TMQ_NR_4VP_org_kfolds
+        TMQ_NR_8VP_yf03_kfolds
+        TMQ_NR_16VP_fib_kfolds
+        TSMD_NR_4VP_yf03_kfolds
+    Alias format:
+        <DB>-<Render>-<View>-<Views>V
+      with:
+        DB in {TMQ, TSMD}
+        Render in {O, N}  (Old, New)
+        View in {Org, YF, Fib}
+        Views in {1,4,8,16,...}
+    """
     m = str(model).upper()
-    if "TMQ_OR_1VP" in m:
-        return "TMQ-O-1V"
-    if "TMQ_OR_4VP" in m:
-        return "TMQ-O-4V"
-    if "TMQ_NR_1VP" in m:
-        return "TMQ-N-1V"
-    if "TMQ_NR_4VP" in m:
-        return "TMQ-N-4V"
-    if "TSMD_NR_1VP" in m:
-        return "TSMD-1V"
-    if "TSMD_NR_4VP" in m:
-        return "TSMD-4V"
-    # Baseline Yana / Graphics-LPIPS original network
+
+    # Baseline Graphics-LPIPS / Yana Orginal network
     if "GRAPHICSLPIPS" in m or "YANA" in m:
         return "Yana-Original"
-    return None
+
+    # Generic pattern for our runs
+    # Example: TMQ_NR_4VP_ORG_KFOLDS, TSMD_NR_8VP_YF03_KFOLDS, TMQ_OR_1VP_ORG_DBG
+    pattern = r"(TMQ|TSMD)_(OR|NR)_(\d+)VP_([A-Z0-9]+)"
+    match = re.search(pattern, m)
+    if not match:
+        return None
+
+    db, render_tag, nviews, view_tag = match.groups()
+
+    db_short = db  # TMQ or TSMD
+
+    if render_tag == "OR":
+        render_short = "O"
+    elif render_tag == "NR":
+        render_short = "N"
+    else:
+        render_short = render_tag
+
+    # Map view tag part
+    if view_tag.startswith("ORG"):
+        view_short = "Org"
+    elif view_tag.startswith("YF"):
+        view_short = "YF"
+    elif view_tag.startswith("FIB"):
+        view_short = "Fib"
+    else:
+        view_short = view_tag
+
+    alias = f"{db_short}-{render_short}-{view_short}-{nviews}V"
+    return alias
 
 
 def test_alias_from_row(row):
-    """Map (database, render_method, view_method, testing_views) to heatmap alias."""
+    """
+    Map (database, render_method, view_method, testing_views) to alias:
+        <DB>-<Render>-<View>-<Views>V
+    where:
+        DB in {TMQ, TSMD}
+        Render in {O, N}
+        View in {Org, YF, Fib}
+    """
     db = str(row.get("database", "")).upper()
     rm = str(row.get("render_method", "")).upper()
     vm = str(row.get("view_method", "")).upper()
     v = int(row.get("testing_views", 0))
 
-    # TMQ - Old render
-    if db == "TMQ" and rm == "OLD_RENDER" and vm == "ORIGINAL":
-        return f"TMQ-O-{v}V"
+    if db not in {"TMQ", "TSMD"}:
+        return None
 
-    # TMQ - New render
-    if db == "TMQ" and rm == "NEW_RENDER" and vm == "ORIGINAL":
-        return f"TMQ-N-{v}V"
+    if rm == "OLD_RENDER":
+        render_short = "O"
+    elif rm == "NEW_RENDER":
+        render_short = "N"
+    else:
+        # Unknown render type
+        return None
 
-    # TSMD - New render + Y_fixed_0.3
-    if db == "TSMD" and rm == "NEW_RENDER" and vm.startswith("Y_FIXED"):
-        return f"TSMD-{v}V"
+    if vm == "ORIGINAL":
+        view_short = "Org"
+    elif vm.startswith("Y_FIXED"):
+        view_short = "YF"
+    elif vm.startswith("FIBONACCI"):
+        view_short = "Fib"
+    else:
+        # Unknown viewpoint method
+        return None
 
-    return None
+    return f"{db}-{render_short}-{view_short}-{v}V"
 
 
 def build_matrix(agg, train_labels, test_labels):
@@ -92,8 +141,37 @@ def build_matrix(agg, train_labels, test_labels):
     return mat
 
 
+def plot_heatmap(data, train_labels, test_labels, title, figsize=(6, 5), vmin=None, vmax=None):
+    """Helper to plot a single heatmap."""
+    df = pd.DataFrame(data, index=train_labels, columns=test_labels)
+    sns.set_theme(style="white", font_scale=1.0)
+    plt.figure(figsize=figsize)
+
+    # Auto vmin/vmax if not provided
+    if vmin is None:
+        vmin = np.nanmin(df.values)
+    if vmax is None:
+        vmax = np.nanmax(df.values)
+
+    ax = sns.heatmap(
+        df,
+        annot=True,
+        fmt=".3f",
+        cmap="viridis",
+        vmin=vmin,
+        vmax=vmax,
+    )
+    ax.set_title(title, pad=12)
+    ax.set_xlabel("Test")
+    ax.set_ylabel("Training")
+
+    plt.tight_layout()
+    plt.show()
+    # You can replace by plt.savefig(...) if needed
+
+
 # ============================
-# 2. Load all results
+# 3. Load all results
 # ============================
 
 summary = load_correlation_summaries(BASE_RESULTS_DIR, SUMMARY_FILENAME)
@@ -108,107 +186,154 @@ summary_valid = summary.dropna(subset=["train_alias", "test_alias"])
 # Aggregate (mean in case multiple runs exist for same (train, test))
 agg = summary_valid.groupby(["train_alias", "test_alias"])[METRIC_COL].mean()
 
+
 # ============================
-# 3. Intra-TMQ heatmap (PLCC)
+# 4. Intra-TMQ - Orginal
 # ============================
 
-configs_tmq = [
-    "TMQ-O-1V",
-    "TMQ-O-4V",
-    "TMQ-N-1V",
-    "TMQ-N-4V",
+# Training configs: Yana baseline + TMQ Old/New with Orginal viewpoint (1 and 4 views)
+train_labels_tmq_Org = [
+    "Yana-Original",
+    "TMQ-O-Org-1V",
+    "TMQ-O-Org-4V",
+    "TMQ-N-Org-1V",
+    "TMQ-N-Org-4V",
 ]
 
-train_labels_tmq = ["Yana-Original"] + configs_tmq
-test_labels_tmq = configs_tmq
-
-data_tmq = build_matrix(agg, train_labels_tmq, test_labels_tmq)
-results_tmq = pd.DataFrame(data_tmq, index=train_labels_tmq, columns=test_labels_tmq)
-
-sns.set_theme(style="white", font_scale=1.0)
-plt.figure(figsize=(6, 5))
-
-ax = sns.heatmap(
-    results_tmq,
-    annot=True,
-    fmt=".3f",
-    cmap="viridis",
-    vmin=np.nanmin(results_tmq.values),
-    vmax=np.nanmax(results_tmq.values),
-)
-ax.set_title("Intra-TMQ - PLCC", pad=12)
-ax.set_xlabel("Test")
-ax.set_ylabel("Entraînement")
-
-plt.tight_layout()
-plt.show()
-# plt.savefig("heatmap_intra_TMQ_PLCC.png", dpi=300, bbox_inches="tight")
-
-
-# ============================
-# 4. Intra-TSMD heatmap (PLCC)
-# ============================
-
-configs_tsmd = ["TSMD-1V", "TSMD-4V"]
-
-train_labels_tsmd = configs_tsmd
-test_labels_tsmd = configs_tsmd
-
-data_tsmd = build_matrix(agg, train_labels_tsmd, test_labels_tsmd)
-results_tsmd = pd.DataFrame(data_tsmd, index=train_labels_tsmd, columns=test_labels_tsmd)
-
-sns.set_theme(style="white", font_scale=1.0)
-plt.figure(figsize=(4, 3.5))
-
-ax = sns.heatmap(
-    results_tsmd,
-    annot=True,
-    fmt=".3f",
-    cmap="viridis",
-    vmin=np.nanmin(results_tsmd.values),
-    vmax=np.nanmax(results_tsmd.values),
-)
-ax.set_title("Intra-TSMD (New) - PLCC", pad=12)
-ax.set_xlabel("Test")
-ax.set_ylabel("Entraînement")
-
-plt.tight_layout()
-plt.show()
-# plt.savefig("heatmap_intra_TSMD_PLCC.png", dpi=300, bbox_inches="tight")
-
-
-# ============================
-# 5. Cross-base New Render heatmap (PLCC)
-# ============================
-
-configs_new = [
-    "TMQ-N-1V",
-    "TMQ-N-4V",
-    "TSMD-1V",
-    "TSMD-4V",
+test_labels_tmq_Org = [
+    "TMQ-O-Org-1V",
+    "TMQ-O-Org-4V",
+    "TMQ-N-Org-1V",
+    "TMQ-N-Org-4V",
 ]
 
-train_labels_cross = configs_new
-test_labels_cross = configs_new
-
-data_cross = build_matrix(agg, train_labels_cross, test_labels_cross)
-results_cross = pd.DataFrame(data_cross, index=train_labels_cross, columns=test_labels_cross)
-
-sns.set_theme(style="white", font_scale=1.0)
-plt.figure(figsize=(6, 5))
-
-ax = sns.heatmap(
-    results_cross,
-    annot=True,
-    fmt=".3f",
-    cmap="viridis",
-    vmin=np.nanmin(results_cross.values),
-    vmax=np.nanmax(results_cross.values),
+data_tmq_Org = build_matrix(agg, train_labels_tmq_Org, test_labels_tmq_Org)
+plot_heatmap(
+    data_tmq_Org,
+    train_labels_tmq_Org,
+    test_labels_tmq_Org,
+    title="Intra-TMQ - Orginal viewpoints - PLCC",
+    figsize=(6, 5),
 )
-ax.set_title("Cross-base (New Render) - PLCC", pad=12)
-ax.set_xlabel("Test")
-ax.set_ylabel("Entraînement")
 
-plt.tight_layout()
-plt.show()
-# plt.savefig("heatmap_crossbase_New_PLCC.png", dpi=300, bbox_inches="tight")
+
+# ============================
+# 5. Intra-TMQ - Y_fixed_0.3
+# ============================
+
+# Adapte cette liste selon les runs que tu as réellement:
+# Par exemple, tu peux avoir 4, 8, 16 vues pour TMQ New Render + Y_fixed_0.3
+train_labels_tmq_yf = [
+    "TMQ-N-YF-4V",
+    "TMQ-N-YF-8V",
+    "TMQ-N-YF-16V",
+]
+
+test_labels_tmq_yf = train_labels_tmq_yf
+
+data_tmq_yf = build_matrix(agg, train_labels_tmq_yf, test_labels_tmq_yf)
+plot_heatmap(
+    data_tmq_yf,
+    train_labels_tmq_yf,
+    test_labels_tmq_yf,
+    title="Intra-TMQ - Y_fixed_0.3 - PLCC",
+    figsize=(5, 4),
+)
+
+
+# ============================
+# 6. Intra-TMQ - Fibonacci
+# ============================
+
+# Idem, adapte cette liste aux configs existantes
+train_labels_tmq_fib = [
+    "TMQ-N-Fib-4V",
+    "TMQ-N-Fib-8V",
+    "TMQ-N-Fib-16V",
+]
+
+test_labels_tmq_fib = train_labels_tmq_fib
+
+data_tmq_fib = build_matrix(agg, train_labels_tmq_fib, test_labels_tmq_fib)
+plot_heatmap(
+    data_tmq_fib,
+    train_labels_tmq_fib,
+    test_labels_tmq_fib,
+    title="Intra-TMQ - Fibonacci - PLCC",
+    figsize=(5, 4),
+)
+
+
+# ============================
+# 7. Intra-TSMD - Y_fixed_0.3
+# ============================
+
+# TSMD: New render + Y_fixed_0.3 uniquement
+# Ajoute ici 8V/16V si tu as ces runs
+train_labels_tsmd_yf = [
+    "TSMD-N-YF-1V",
+    "TSMD-N-YF-4V",
+    "TSMD-N-YF-8V",
+    "TSMD-N-YF-16V",
+]
+
+test_labels_tsmd_yf = train_labels_tsmd_yf
+
+data_tsmd_yf = build_matrix(agg, train_labels_tsmd_yf, test_labels_tsmd_yf)
+plot_heatmap(
+    data_tsmd_yf,
+    train_labels_tsmd_yf,
+    test_labels_tsmd_yf,
+    title="Intra-TSMD - Y_fixed_0.3 - PLCC",
+    figsize=(5, 4),
+)
+
+
+# ============================
+# 8. Cross-base New Render - Y_fixed_0.3
+# ============================
+
+# Cross-base entre TMQ et TSMD, New render, Y_fixed, avec plusieurs nombres de vues
+train_labels_cross_yf = [
+    "TMQ-N-YF-4V",
+    "TMQ-N-YF-8V",
+    "TMQ-N-YF-16V",
+    "TSMD-N-YF-1V",
+    "TSMD-N-YF-4V",
+    "TSMD-N-YF-8V",
+    "TSMD-N-YF-16V",
+]
+
+test_labels_cross_yf = train_labels_cross_yf
+
+data_cross_yf = build_matrix(agg, train_labels_cross_yf, test_labels_cross_yf)
+plot_heatmap(
+    data_cross_yf,
+    train_labels_cross_yf,
+    test_labels_cross_yf,
+    title="Cross-base - New Render - Y_fixed_0.3 - PLCC",
+    figsize=(7, 5),
+)
+
+
+# ============================
+# 9. Cross-base New Render - Fibonacci (optionnel)
+# ============================
+
+train_labels_cross_fib = [
+    "TMQ-N-Fib-4V",
+    "TMQ-N-Fib-8V",
+    "TMQ-N-Fib-16V",
+    # Ajoute ici des TSMD-N-Fib-xV si tu en as
+]
+
+test_labels_cross_fib = train_labels_cross_fib
+
+data_cross_fib = build_matrix(agg, train_labels_cross_fib, test_labels_cross_fib)
+plot_heatmap(
+    data_cross_fib,
+    train_labels_cross_fib,
+    test_labels_cross_fib,
+    title="Cross-base - New Render - Fibonacci - PLCC",
+    figsize=(6, 5),
+)

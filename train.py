@@ -181,7 +181,7 @@ def main():
     parser.add_argument('--use_gpu', action='store_true', help='turn on flag to use GPU', default=True)
     parser.add_argument('--gpu_ids', type=int, nargs='+', default=[0], help='gpus to use')
 
-    parser.add_argument('--nThreads', type=int, default=16, help='number of threads to use in data loader') 
+    parser.add_argument('--nThreads', type=int, default=10, help='number of threads to use in data loader') 
     
     parser.add_argument('--nepoch', type=int, default=5, help='# epochs at base learning rate')
     parser.add_argument('--nepoch_decay', type=int, default=5, help='# additional epochs at linearly learning rate')
