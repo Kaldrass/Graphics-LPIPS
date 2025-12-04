@@ -164,9 +164,8 @@ os.environ['PYTHONWARNINGS'] = 'ignore'
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--datasets', type=str, nargs='+', default=['./dataset/folds/TexturedDB_80%_TrainList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/folds/TSMD_80%_TrainList_scaled.csv'], help='datasets to train on')
-    parser.add_argument('--testcsv', type=str, nargs='+', default=['./dataset/folds/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv', './dataset/TSMD/folds/TSMD_20%_TestList_scaled.csv'], help='datasets to test on')
-
+    parser.add_argument('--datasets', type=str, default='./dataset/TMQ/folds/TexturedDB_80%_TrainList_withnbPatchesPerVP_threth0.6.csv', help='datasets to train on') # './dataset/TSMD/folds/TSMD_80%_TrainList_scaled.csv', './dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_train80.csv'
+    parser.add_argument('--testcsv', type=str, default='./dataset/TMQ/folds/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv', help='datasets to test on') #, './dataset/TSMD/folds/TSMD_20%_TestList_scaled.csv', './dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_test20.csv'
 
     parser.add_argument('--src_root', type=str, help='root folder containing ref and dist folders')
     parser.add_argument('--cache_root', type=str, default="C:\\Graphics_LPIPS\\cache", help='root folder for caching viewpoints on SSD. Be sure to set it on SSD. Set to "" to disable caching.')
@@ -250,7 +249,9 @@ def main():
         else:
             print('Fold %d already exists, skipping...' % fold)
             continue  # skip existing fold
-        Testset = opt.testcsv[1 if opt.target=="mos" else 0]
+
+        # !! Now passing thz dataset in arg
+        Testset = opt.testcsv
         Testset_name, ext = os.path.splitext(Testset)
         Testset = Testset_name + '_k' + str(fold) + ext
         
@@ -276,7 +277,7 @@ def main():
 
         for epoch in range(1, opt.nepoch + opt.nepoch_decay + 1):
                 # Load training data to sample random patches every epoch
-                trainSet = opt.datasets[1 if opt.target=="mos" else 0]
+                trainSet = opt.datasets#[1 if opt.target=="mos" else 0]
                 trainSet_name, ext = os.path.splitext(trainSet)
                 trainSet = trainSet_name + '_k' + str(fold) + ext
                 data_loader = dl.CreateDataLoader(trainSet,dataset_mode='2afc', trainset=True, Nbpatches=opt.npatches, 

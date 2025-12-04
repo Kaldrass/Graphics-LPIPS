@@ -22,13 +22,23 @@ rem ========================
 @REM echo training TMQ_NR_4VP_fib_kfolds done.
 @REM python train.py --name TMQ_NR_8VP_yf03_kfolds --src_root "D:\These\Projets\CompareMetrics\out\TMQ\New_Render\Y_fixed_0.3" --root_refPatches "\Source\8VP" --root_distPatches "\Distorted\8VP" --target "judges"
 @REM echo training TMQ_NR_8VP_yf03_kfolds done.
-python train.py --name TMQ_NR_16VP_yf03_kfolds --src_root "D:\These\Projets\CompareMetrics\out\TMQ\New_Render\Y_fixed_0.3" --root_refPatches "\Source\16VP" --root_distPatches "\Distorted\16VP" --target "judges"
-echo training TMQ_NR_16VP_fib_kfolds done.
+@REM python train.py --name TMQ_NR_16VP_yf03_kfolds --src_root "D:\These\Projets\CompareMetrics\out\TMQ\New_Render\Y_fixed_0.3" --root_refPatches "\Source\16VP" --root_distPatches "\Distorted\16VP" --target "judges"
+@REM echo training TMQ_NR_16VP_fib_kfolds done.
 @REM ---------------------------------
 @REM python train.py --name TMQ_NR_1VP_yf03_kfolds --src_root "D:\These\Projets\CompareMetrics\out\TMQ\New_Render\Y_fixed_0.3" --root_refPatches "\Source\1VP" --root_distPatches "\Distorted\1VP" --target "judges"
 @REM echo training TMQ_NR_1VP_yf03_kfolds done.
 @REM python train.py --name TMQ_NR_4VP_yf03_kfolds --src_root "D:\These\Projets\CompareMetrics\out\TMQ\New_Render\Y_fixed_0.3" --root_refPatches "\Source\4VP" --root_distPatches "\Distorted\4VP" --target "judges"
 @REM echo training TMQ_NR_4VP_yf03_kfolds done.
+
+python train.py --name SJTU-TMQA_NR_4VP_yf03_kfolds --src_root "D:\These\Projets\CompareMetrics\out\SJTU-TMQA\New_Render\Y_fixed_0.3" --root_refPatches "\Source\4VP" --root_distPatches "\Distorted\4VP" --datasets "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_train80.csv" --testcsv "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_test20.csv" --target "mos"
+echo training SJTU-TMQA_NR_4VP_yf03_kfolds done.
+python train.py --name SJTU-TMQA_NR_8VP_yf03_kfolds --src_root "D:\These\Projets\CompareMetrics\out\SJTU-TMQA\New_Render\Y_fixed_0.3" --root_refPatches "\Source\8VP" --root_distPatches "\Distorted\8VP" --datasets "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_train80.csv" --testcsv "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_test20.csv" --target "mos"
+echo training SJTU-TMQA_NR_8VP_yf03_kfolds done.
+python train.py --name SJTU-TMQA_NR_16VP_yf03_kfolds --src_root "D:\These\Projets\CompareMetrics\out\SJTU-TMQA\New_Render\Y_fixed_0.3" --root_refPatches "\Source\16VP" --root_distPatches "\Distorted\16VP" --datasets "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_train80.csv" --testcsv "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_test20.csv" --target "mos"
+echo training SJTU-TMQA_NR_16VP_yf03_kfolds done.
+
+
+
 rem ========================
 
 timeout /t 3 >nul
