@@ -32,10 +32,28 @@ rem ========================
 
 python train.py --name SJTU-TMQA_NR_4VP_yf03_kfolds --src_root "D:\These\Projets\CompareMetrics\out\SJTU-TMQA\New_Render\Y_fixed_0.3" --root_refPatches "\Source\4VP" --root_distPatches "\Distorted\4VP" --datasets "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_train80.csv" --testcsv "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_test20.csv" --target "mos"
 echo training SJTU-TMQA_NR_4VP_yf03_kfolds done.
-python train.py --name SJTU-TMQA_NR_8VP_yf03_kfolds --src_root "D:\These\Projets\CompareMetrics\out\SJTU-TMQA\New_Render\Y_fixed_0.3" --root_refPatches "\Source\8VP" --root_distPatches "\Distorted\8VP" --datasets "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_train80.csv" --testcsv "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_test20.csv" --target "mos"
-echo training SJTU-TMQA_NR_8VP_yf03_kfolds done.
-python train.py --name SJTU-TMQA_NR_16VP_yf03_kfolds --src_root "D:\These\Projets\CompareMetrics\out\SJTU-TMQA\New_Render\Y_fixed_0.3" --root_refPatches "\Source\16VP" --root_distPatches "\Distorted\16VP" --datasets "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_train80.csv" --testcsv "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_test20.csv" --target "mos"
-echo training SJTU-TMQA_NR_16VP_yf03_kfolds done.
+@REM python train.py --name SJTU-TMQA_NR_8VP_yf03_kfolds --src_root "D:\These\Projets\CompareMetrics\out\SJTU-TMQA\New_Render\Y_fixed_0.3" --root_refPatches "\Source\8VP" --root_distPatches "\Distorted\8VP" --datasets "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_train80.csv" --testcsv "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_test20.csv" --target "mos"
+@REM echo training SJTU-TMQA_NR_8VP_yf03_kfolds done.
+@REM python train.py --name SJTU-TMQA_NR_16VP_yf03_kfolds --src_root "D:\These\Projets\CompareMetrics\out\SJTU-TMQA\New_Render\Y_fixed_0.3" --root_refPatches "\Source\16VP" --root_distPatches "\Distorted\16VP" --datasets "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_train80.csv" --testcsv "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_test20.csv" --target "mos"
+@REM echo training SJTU-TMQA_NR_16VP_yf03_kfolds done.
+python train.py --name SJTU-TMQA_NR_4VP_fib_kfolds --src_root "D:\These\Projets\CompareMetrics\out\SJTU-TMQA\New_Render\Fibonacci" --root_refPatches "\Source\4VP" --root_distPatches "\Distorted\4VP" --datasets "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_train80.csv" --testcsv "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_test20.csv" --target "mos"
+python train.py --name SJTU-TMQA_NR_8VP_fib_kfolds --src_root "D:\These\Projets\CompareMetrics\out\SJTU-TMQA\New_Render\Fibonacci" --root_refPatches "\Source\8VP" --root_distPatches "\Distorted\8VP" --datasets "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_train80.csv" --testcsv "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_test20.csv" --target "mos"
+python train.py --name SJTU-TMQA_NR_16VP_fib_kfolds --src_root "D:\These\Projets\CompareMetrics\out\SJTU-TMQA\New_Render\Fibonacci" --root_refPatches "\Source\16VP" --root_distPatches "\Distorted\16VP" --datasets "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_train80.csv" --testcsv "./dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_test20.csv" --target "mos"
+@REM INTRA SJTU-TMQA
+python config.py -m SJTU-TMQA_NR_4VP_fib_kfolds -use_folds True -v 4 -vm Fibonacci -rm New_Render -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\folds\SJTU-TMQA_MOS_test20.csv"
+python config.py -m SJTU-TMQA_NR_4VP_yf03_kfolds -use_folds True -v 4 -vm Y_fixed_0.3 -rm New_Render -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\folds\SJTU-TMQA_MOS_test20.csv"
+python config.py -m SJTU-TMQA_NR_8VP_fib_kfolds -use_folds True -v 8 -vm Fibonacci -rm New_Render -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\folds\SJTU-TMQA_MOS_test20.csv"
+python config.py -m SJTU-TMQA_NR_16VP_fib_kfolds -use_folds True -v 16 -vm Fibonacci -rm New_Render -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\folds\SJTU-TMQA_MOS_test20.csv"
+@REM SJTU-TMQA -> TMQ 
+python config.py -m SJTU-TMQA_NR_4VP_fib_kfolds -use_folds True -v 4 -vm Fibonacci -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "D:\These\Graphics-LPIPS\dataset\TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv"
+python config.py -m SJTU-TMQA_NR_4VP_yf03_kfolds -use_folds True -v 4 -vm Y_fixed_0.3 -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "D:\These\Graphics-LPIPS\dataset\TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv"
+python config.py -m SJTU-TMQA_NR_8VP_fib_kfolds -use_folds True -v 8 -vm Fibonacci -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "D:\These\Graphics-LPIPS\dataset\TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv"
+python config.py -m SJTU-TMQA_NR_16VP_fib_kfolds -use_folds True -v 16 -vm Fibonacci -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "D:\These\Graphics-LPIPS\dataset\TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv"
+@REM TMQ -> SJTU-TMQA
+python config.py -m TMQ_NR_4VP_fib_kfolds -use_folds True -v 4 -vm Fibonacci -rm New_Render -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_normalized.csv"
+python config.py -m TMQ_NR_4VP_yf03_kfolds -use_folds True -v 4 -vm Y_fixed_0.3 -rm New_Render -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_normalized.csv"
+python config.py -m TMQ_NR_8VP_fib_kfolds -use_folds True -v 8 -vm Fibonacci -rm New_Render -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_normalized.csv"
+python config.py -m TMQ_NR_16VP_fib_kfolds -use_folds True -v 16 -vm Fibonacci -rm New_Render -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_normalized.csv"
 
 
 

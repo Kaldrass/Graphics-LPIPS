@@ -164,8 +164,8 @@ os.environ['PYTHONWARNINGS'] = 'ignore'
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--datasets', type=str, default='./dataset/TMQ/folds/TexturedDB_80%_TrainList_withnbPatchesPerVP_threth0.6.csv', help='datasets to train on') # './dataset/TSMD/folds/TSMD_80%_TrainList_scaled.csv', './dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_train80.csv'
-    parser.add_argument('--testcsv', type=str, default='./dataset/TMQ/folds/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv', help='datasets to test on') #, './dataset/TSMD/folds/TSMD_20%_TestList_scaled.csv', './dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_test20.csv'
+    parser.add_argument('--datasets', type=str, default='', help='datasets to train on') #./dataset/TMQ/folds/TexturedDB_80%_TrainList_withnbPatchesPerVP_threth0.6.csv './dataset/TSMD/folds/TSMD_80%_TrainList_scaled.csv', './dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_train80.csv'
+    parser.add_argument('--testcsv', type=str, default='', help='datasets to test on') #,./dataset/TMQ/folds/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv './dataset/TSMD/folds/TSMD_20%_TestList_scaled.csv', './dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_test20.csv'
 
     parser.add_argument('--src_root', type=str, help='root folder containing ref and dist folders')
     parser.add_argument('--cache_root', type=str, default="C:\\Graphics_LPIPS\\cache", help='root folder for caching viewpoints on SSD. Be sure to set it on SSD. Set to "" to disable caching.')

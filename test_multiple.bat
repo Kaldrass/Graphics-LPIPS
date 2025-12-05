@@ -112,7 +112,7 @@ rem ========================
 @REM python config.py -m TMQ_NR_8VP_yf03_kfolds -use_folds True -v 1 -vm Original -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "D:\These\Graphics-LPIPS\dataset\TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv"
 @REM python config.py -m TMQ_NR_8VP_yf03_kfolds -use_folds True -v 8 -vm Y_fixed_0.3 -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "D:\These\Graphics-LPIPS\dataset\TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv"
 python config.py -m TMQ_NR_8VP_yf03_kfolds -use_folds True -v 8 -vm Y_fixed_0.3 -rm New_Render -db "TSMD" -mos "D:\These\BDD\TexturedMeshes\TSMD\MOS\TSMD_MOS.csv" -testlist "D:\These\Graphics-LPIPS\dataset\TSMD\_TSMD_fulldataset.csv"
-
+python config.py -m TMQ_NR_4VP_yf03_kfolds -use_folds True -v 4 -vm Y_fixed_0.3 -rm New_Render -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_normalized.csv"
 @REM python config.py -m TSMD_NR_8VP_yf03_kfolds -use_folds True -v 8 -vm Y_fixed_0.3 -rm New_Render -db "TSMD" -mos "D:\These\BDD\TexturedMeshes\TSMD\MOS\TSMD_MOS.csv" -testlist "D:\These\Graphics-LPIPS\dataset\TSMD\TSMD_20%%_TestList_scaled.csv"
 
 echo TSMD_NR_8VP_yf03_kfolds done
