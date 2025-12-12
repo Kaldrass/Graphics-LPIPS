@@ -49,7 +49,7 @@ def training_alias_from_model(model):
     Alias format:
         <DB>-<Render>-<View>-<Views>V
       with:
-        DB in {TMQ, TSMD}
+        DB in {TMQ, TSMD, SJTU-TMQA}
         Render in {O, N}  (Old, New)
         View in {Org, YF, Fib}
         Views in {1,4,8,16,...}
@@ -62,7 +62,7 @@ def training_alias_from_model(model):
 
     # Generic pattern for our runs
     # Example: TMQ_NR_4VP_ORG_KFOLDS, TSMD_NR_8VP_YF03_KFOLDS, TMQ_OR_1VP_ORG_DBG
-    pattern = r"(TMQ|TSMD)_(OR|NR)_(\d+)VP_([A-Z0-9]+)"
+    pattern = r"(TMQ|TSMD|SJTU-TMQA)_(OR|NR)_(\d+)VP_([A-Z0-9]+)"
     match = re.search(pattern, m)
     if not match:
         return None
@@ -97,7 +97,7 @@ def test_alias_from_row(row):
     Map (database, render_method, view_method, testing_views) to alias:
         <DB>-<Render>-<View>-<Views>V
     where:
-        DB in {TMQ, TSMD}
+        DB in {TMQ, TSMD, SJTU-TMQA}
         Render in {O, N}
         View in {Org, YF, Fib}
     """
@@ -106,7 +106,7 @@ def test_alias_from_row(row):
     vm = str(row.get("view_method", "")).upper()
     v = int(row.get("testing_views", 0))
 
-    if db not in {"TMQ", "TSMD"}:
+    if db not in {"TMQ", "TSMD", "SJTU-TMQA"}:
         return None
 
     if rm == "OLD_RENDER":
@@ -336,4 +336,63 @@ plot_heatmap(
     test_labels_cross_fib,
     title="Cross-base - New Render - Fibonacci - PLCC",
     figsize=(6, 5),
+)
+
+
+# SJTU-TMQA intra-base results
+train_labels_sjtu_tmqa = [
+    "SJTU-TMQA-N-Fib-4V",
+    "SJTU-TMQA-N-Fib-8V",
+    "SJTU-TMQA-N-Fib-16V",
+    "SJTU-TMQA-N-YF-4V",
+    "SJTU-TMQA-N-YF-8V",
+    "SJTU-TMQA-N-YF-16V",    
+]
+test_labels_sjtu_tmqa = train_labels_sjtu_tmqa
+data_sjtu_tmqa = build_matrix(agg, train_labels_sjtu_tmqa, test_labels_sjtu_tmqa)
+plot_heatmap(
+    data_sjtu_tmqa,
+    train_labels_sjtu_tmqa,
+    test_labels_sjtu_tmqa,
+    title="Intra-SJTU-TMQA - PLCC",
+    figsize=(7, 5),
+)
+
+# Tests cross-base TMQ <-> SJTU-TMQA
+train_labels_cross_sjtu_tmqa = [
+    "Yana-Original",
+    "TMQ-N-Fib-4V",
+    "TMQ-N-Fib-8V",
+    "TMQ-N-Fib-16V",
+    "TMQ-N-YF-4V",
+    "TMQ-N-YF-8V",
+    "TMQ-N-YF-16V",    
+    "SJTU-TMQA-N-Fib-4V",
+    "SJTU-TMQA-N-Fib-8V",
+    "SJTU-TMQA-N-Fib-16V",
+    "SJTU-TMQA-N-YF-4V",
+    "SJTU-TMQA-N-YF-8V",
+    "SJTU-TMQA-N-YF-16V",    
+]
+test_labels_cross_sjtu_tmqa = [
+    "TMQ-N-Fib-4V",
+    "TMQ-N-Fib-8V",
+    "TMQ-N-Fib-16V",
+    "TMQ-N-YF-4V",
+    "TMQ-N-YF-8V",
+    "TMQ-N-YF-16V",    
+    "SJTU-TMQA-N-Fib-4V",
+    "SJTU-TMQA-N-Fib-8V",
+    "SJTU-TMQA-N-Fib-16V",
+    "SJTU-TMQA-N-YF-4V",
+    "SJTU-TMQA-N-YF-8V",
+    "SJTU-TMQA-N-YF-16V",    
+]   
+data_cross_sjtu_tmqa = build_matrix(agg, train_labels_cross_sjtu_tmqa, test_labels_cross_sjtu_tmqa)
+plot_heatmap(
+    data_cross_sjtu_tmqa,
+    train_labels_cross_sjtu_tmqa,
+    test_labels_cross_sjtu_tmqa,
+    title="Cross-base TMQ <-> SJTU-TMQA - PLCC",
+    figsize=(8, 6),
 )

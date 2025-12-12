@@ -26,7 +26,7 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
 parser.add_argument('--use_gpu', action='store_true', default=True, help='turn on flag to use GPU')
 parser.add_argument('--version', type=str, default='0.1')
 parser.add_argument('-m', '--model', type=str, required=True)
-parser.add_argument('-use_folds', type=bool, required=True)
+parser.add_argument('--use_folds', action='store_true')
 parser.add_argument('-v', '--views', type=int, required=True)
 parser.add_argument('-vm', '--view_method', type=str, required=True)
 parser.add_argument('-rm', '--render_method', type=str, required=True)
@@ -111,8 +111,9 @@ for fold_idx, ref_obj_list in enumerate(ref_obj_list_folds):
     #If the file already exists, we delete it
     # else we create it
     if not(os.path.exists(output_folds[fold_idx])):
-        os.makedirs(os.path.dirname(output_folds[fold_idx]), exist_ok=True)    
-    print('--- Starting fold k%d ---'%fold_idx)
+        os.makedirs(os.path.dirname(output_folds[fold_idx]), exist_ok=True)
+    if use_folds:
+        print('--- Starting fold k%d ---'%fold_idx)
     for ref_obj in ref_obj_list:
 
         ref_views_folder = root_refPatches + '/' + ref_obj + '/views'

@@ -230,7 +230,7 @@ def main():
     parser.add_argument('--use_gpu', action='store_true', default=True, help='turn on flag to use GPU')
     parser.add_argument('--version', type=str, default='0.1')
     parser.add_argument('-m', '--model', type=str, required=True)
-    parser.add_argument('-use_folds', type=bool, required=True)
+    parser.add_argument('--use_folds', action='store_true')
     parser.add_argument('-v', '--views', type=int, required=True)
     parser.add_argument('-vm', '--view_method', type=str, required=True)
     parser.add_argument('-rm', '--render_method', type=str, required=True)

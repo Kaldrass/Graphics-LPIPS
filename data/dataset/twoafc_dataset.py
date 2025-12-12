@@ -124,8 +124,8 @@ class TwoAFCDataset(Dataset):
         # Racines des répertoires
         self.cache_root = cache_root #r'C:\Graphics_LPIPS\cache'
         self.src_root = src_root
-        self.root_refPatches =  self.src_root + root_refPatches
-        self.root_distPatches = self.src_root + root_distPatches
+        self.root_refPatches =  os.path.join(self.src_root, root_refPatches)
+        self.root_distPatches = os.path.join(self.src_root, root_distPatches)
         self.img_ext = img_ext
         # root_judges = r'D:\These\Graphics-LPIPS\dataset\judge_trainingset' if Trainset else r'D:\These\Graphics-LPIPS\dataset\judge_testset'
         if (target == 'judges'):

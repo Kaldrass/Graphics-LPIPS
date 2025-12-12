@@ -166,8 +166,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--datasets', type=str, default='', help='datasets to train on') #./dataset/TMQ/folds/TexturedDB_80%_TrainList_withnbPatchesPerVP_threth0.6.csv './dataset/TSMD/folds/TSMD_80%_TrainList_scaled.csv', './dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_train80.csv'
     parser.add_argument('--testcsv', type=str, default='', help='datasets to test on') #,./dataset/TMQ/folds/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv './dataset/TSMD/folds/TSMD_20%_TestList_scaled.csv', './dataset/SJTU-TMQA/folds/SJTU-TMQA_MOS_test20.csv'
-
-    parser.add_argument('--src_root', type=str, help='root folder containing ref and dist folders')
+    parser.add_argument('--different_testset', '-dt', action='store_true', default=False, help='use different testset than trainset. If so, provide 2 src_root, root_refPatches, root_distPatches for train and testset respectively.')
+    parser.add_argument('--use_folds', action='store_true', help='use k-folds for testing')
+    
+    parser.add_argument('--src_root', nargs='+', help='root folder containing ref and dist folders')
     parser.add_argument('--cache_root', type=str, default="C:\\Graphics_LPIPS\\cache", help='root folder for caching viewpoints on SSD. Be sure to set it on SSD. Set to "" to disable caching.')
     parser.add_argument('--root_refPatches', type=str, help='reference patches relative location')
     parser.add_argument('--root_distPatches', type=str, help='distorted patches relative location')
@@ -226,8 +228,11 @@ def main():
     # The random patches for the test set are only sampled once at the beginning of training in order to avoid noise in the validation loss.
     
     ## Looping for the 5 folds in ./dataset/folds/ 
-    for fold in range(5):
-        print('--- Starting fold k%d ---'%fold)
+    if opt.use_folds:
+        num_folds = 5
+    for fold in range(num_folds if opt.use_folds else 1):
+        if(opt.use_folds):
+            print('--- Starting fold k%d ---'%fold)
         # Re-initialize model for this fold
         trainer = lpips.Trainer()
         trainer.initialize(
@@ -243,21 +248,28 @@ def main():
         print("Model on:", next(trainer.net.parameters()).device)
         # testSet is TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv. For each fold, we modify the name : 
         # TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6_k${i}.csv
-        opt.save_dir = os.path.join(opt.checkpoints_dir,opt.name,'fold_k'+str(fold))
+        if(opt.use_folds):
+            opt.save_dir = os.path.join(opt.checkpoints_dir,opt.name,'fold_k'+str(fold))
+        else: 
+            opt.save_dir = os.path.join(opt.checkpoints_dir,opt.name)
         if(not os.path.exists(opt.save_dir)):
             os.mkdir(opt.save_dir)
-        else:
-            print('Fold %d already exists, skipping...' % fold)
+        elif opt.use_folds:
+            print('fold %d already exists, skipping...' % fold)
             continue  # skip existing fold
 
-        # !! Now passing thz dataset in arg
+        # !! Now passing the dataset in arg
         Testset = opt.testcsv
         Testset_name, ext = os.path.splitext(Testset)
-        Testset = Testset_name + '_k' + str(fold) + ext
         
+        if(opt.use_folds):
+            Testset = Testset_name + '_k' + str(fold) + ext
         data_loader_testSet = dl.CreateDataLoader(Testset,dataset_mode='2afc', Nbpatches= opt.npatches, batch_size=opt.batch_size,
                                                 pin_memory=False, drop_last=False, prefetch_factor=None, nThreads=0,
-                                                src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, cache_root=opt.cache_root,
+                                                src_root=opt.src_root[1] if opt.different_testset else opt.src_root[0], 
+                                                root_refPatches=opt.root_refPatches, 
+                                                root_distPatches=opt.root_distPatches, 
+                                                cache_root=opt.cache_root,
                                                 target = opt.target) 
         test_TestSet = Test_TestSet(opt)
         total_steps = 0
@@ -278,12 +290,17 @@ def main():
         for epoch in range(1, opt.nepoch + opt.nepoch_decay + 1):
                 # Load training data to sample random patches every epoch
                 trainSet = opt.datasets#[1 if opt.target=="mos" else 0]
-                trainSet_name, ext = os.path.splitext(trainSet)
-                trainSet = trainSet_name + '_k' + str(fold) + ext
+                if(opt.use_folds):
+                    trainSet_name, ext = os.path.splitext(trainSet)
+                    trainSet = trainSet_name + '_k' + str(fold) + ext
+                    
                 data_loader = dl.CreateDataLoader(trainSet,dataset_mode='2afc', trainset=True, Nbpatches=opt.npatches, 
                                             load_size = load_size, batch_size=opt.batch_size, serial_batches=True, nThreads=opt.nThreads, 
-                                                    pin_memory=True, persistent_workers=True, prefetch_factor=2,  # prefetch_factor=2,
-                                            src_root=opt.src_root, root_refPatches=opt.root_refPatches, root_distPatches=opt.root_distPatches, cache_root=opt.cache_root,
+                                            pin_memory=True, persistent_workers=True, prefetch_factor=2,  # prefetch_factor=2,
+                                            src_root=opt.src_root[0], 
+                                            root_refPatches=opt.root_refPatches, 
+                                            root_distPatches=opt.root_distPatches, 
+                                            cache_root=opt.cache_root,
                                             target=opt.target)
                 dataset = data_loader.load_data()
                 dataset_size = len(data_loader)

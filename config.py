@@ -15,7 +15,7 @@ import argparse
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-m','--model', type=str, default="TMQ_NR_1VP_org_kfolds", help='model to evaluate: LPIPS or GraphicsLPIPS')
-parser.add_argument('-use_folds', type=bool, default=True, help='use k-folds for testing TMQ or not')
+parser.add_argument('--use_folds', action='store_true', help='use k-folds for testing TMQ or not')
 parser.add_argument('-v', '--views', type=int,  help='Number of testing views', default=1)
 parser.add_argument('-vm','--view_method', type=str, default="Original", help='view selection method: Original, Fibonacci, Y_fixed_0.3, Polyhedron')
 parser.add_argument('-rm','--render_method', type=str, default="New_Render", help='render method: New_Render or Old_render')
@@ -36,34 +36,26 @@ test_list_csv = opt.test_list_csv
 
 if __name__ == "__main__":
     # launch Light_GraphicsLPIPS_csv.py and correlation_VP.py after changing these parameters
-    # print("Evaluating model:", model)
-    # print("Using database:", database)
-    # print("Number of testing views:", testing_views)
-    # print("View selection method:", view_method)
-    # print("Render method:", render_method)
-    # print("Using k-folds for testing:", use_folds)
-    # print("MOS CSV file:", mos_csv_file)
-    # print("Test list CSV file:", test_list_csv)
     cmd = [
-           'python', 'Light_GraphicsLPIPS_csv.py',
-           '-m', model,
-           '-use_folds', str(use_folds),
-           '-v', str(testing_views),
-           '-vm', view_method,
-           '-rm', render_method,
-           '-db', database,
-           '-mos', mos_csv_file,
-           '-testlist', test_list_csv,
-    ]
+    'python', 'Light_GraphicsLPIPS_csv.py',
+    '-m', model,
+    *(['--use_folds'] if use_folds else []),
+    '-v', str(testing_views),
+    '-vm', view_method,
+    '-rm', render_method,
+    '-db', database,
+    '-mos', mos_csv_file,
+    '-testlist', test_list_csv,
+]
     cmd2 = [
            'python', 'correlation_VP.py',
            '-m', model,
-           '-use_folds', str(use_folds),
+           *(['--use_folds'] if use_folds else []),
            '-v', str(testing_views),
            '-vm', view_method,
            '-rm', render_method,
            '-db', database,
-    ]
+    ] 
     subprocess.run(cmd, check=True, text=True)
     subprocess.run(cmd2, check=True, text=True)
 
