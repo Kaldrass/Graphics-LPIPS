@@ -39,46 +39,26 @@ def load_correlation_summaries(root_dir, summary_filename=SUMMARY_FILENAME):
 # ============================
 
 def training_alias_from_model(model):
-    """
-    Map model name (training config) to a short alias:
-      Example model names:
-        TMQ_NR_4VP_org_kfolds
-        TMQ_NR_8VP_yf03_kfolds
-        TMQ_NR_16VP_fib_kfolds
-        TSMD_NR_4VP_yf03_kfolds
-    Alias format:
-        <DB>-<Render>-<View>-<Views>V
-      with:
-        DB in {TMQ, TSMD, SJTU-TMQA}
-        Render in {O, N}  (Old, New)
-        View in {Org, YF, Fib}
-        Views in {1,4,8,16,...}
-    """
     m = str(model).upper()
 
-    # Baseline Graphics-LPIPS / Yana Orginal network
     if "GRAPHICSLPIPS" in m or "YANA" in m:
         return "Yana-Original"
 
-    # Generic pattern for our runs
-    # Example: TMQ_NR_4VP_ORG_KFOLDS, TSMD_NR_8VP_YF03_KFOLDS, TMQ_OR_1VP_ORG_DBG
-    pattern = r"(TMQ|TSMD|SJTU-TMQA)_(OR|NR)_(\d+)VP_([A-Z0-9]+)"
+    naa = ("_NAA" in m) or ("-NAA" in m) or ("NAA_" in m) or m.endswith("NAA") or ("_XAA" in m)
+
+    # Longest first to avoid matching TMQ before TMQ-SJTU
+    pattern = r"(TMQ(?:-|_)SJTU|SJTU-TMQA|TMQ|TSMD)_(OR|NR)_(\d+)VP_([A-Z0-9]+)"
     match = re.search(pattern, m)
     if not match:
         return None
 
     db, render_tag, nviews, view_tag = match.groups()
 
-    db_short = db  # TMQ or TSMD
+    # Normalize
+    db = db.replace("_", "-")
 
-    if render_tag == "OR":
-        render_short = "O"
-    elif render_tag == "NR":
-        render_short = "N"
-    else:
-        render_short = render_tag
+    render_short = "O" if render_tag == "OR" else "N" if render_tag == "NR" else render_tag
 
-    # Map view tag part
     if view_tag.startswith("ORG"):
         view_short = "Org"
     elif view_tag.startswith("YF"):
@@ -88,25 +68,19 @@ def training_alias_from_model(model):
     else:
         view_short = view_tag
 
-    alias = f"{db_short}-{render_short}-{view_short}-{nviews}V"
-    return alias
+    if naa:
+        view_short += "-NAA"
+
+    return f"{db}-{render_short}-{view_short}-{int(nviews)}V"
 
 
 def test_alias_from_row(row):
-    """
-    Map (database, render_method, view_method, testing_views) to alias:
-        <DB>-<Render>-<View>-<Views>V
-    where:
-        DB in {TMQ, TSMD, SJTU-TMQA}
-        Render in {O, N}
-        View in {Org, YF, Fib}
-    """
     db = str(row.get("database", "")).upper()
     rm = str(row.get("render_method", "")).upper()
     vm = str(row.get("view_method", "")).upper()
     v = int(row.get("testing_views", 0))
 
-    if db not in {"TMQ", "TSMD", "SJTU-TMQA"}:
+    if db not in {"TMQ", "TSMD", "SJTU-TMQA", "TMQ-SJTU"}:
         return None
 
     if rm == "OLD_RENDER":
@@ -114,7 +88,6 @@ def test_alias_from_row(row):
     elif rm == "NEW_RENDER":
         render_short = "N"
     else:
-        # Unknown render type
         return None
 
     if vm == "ORIGINAL":
@@ -124,8 +97,11 @@ def test_alias_from_row(row):
     elif vm.startswith("FIBONACCI"):
         view_short = "Fib"
     else:
-        # Unknown viewpoint method
         return None
+
+    naa = ("NAA" in vm) or ("_XAA" in vm)
+    if naa:
+        view_short += "-NAA"
 
     return f"{db}-{render_short}-{view_short}-{v}V"
 
@@ -394,5 +370,37 @@ plot_heatmap(
     train_labels_cross_sjtu_tmqa,
     test_labels_cross_sjtu_tmqa,
     title="Cross-base TMQ <-> SJTU-TMQA - PLCC",
+    figsize=(8, 6),
+)
+# Tests cross-base YF TMQ <-> SJTU-TMQA witrhout anti-aliasing
+train_labels_cross_sjtu_tmqa_YFNAA = [
+    # "Yana-Original",
+    "TMQ-N-Org-1V",
+    "TMQ-N-YF-4V",
+    "TMQ-N-YF-8V",    
+    "TMQ-SJTU-N-YF-4V",
+    "TMQ-SJTU-N-YF-8V",
+    "TMQ-SJTU-N-YF-16V",
+    "SJTU-TMQA-N-YF-NAA-4V",
+    "SJTU-TMQA-N-YF-NAA-8V",
+    "SJTU-TMQA-N-YF-NAA-16V",    
+]
+test_labels_cross_sjtu_tmqa_YFNAA = [
+    "TMQ-N-Org-1V",
+    "TMQ-N-YF-4V",
+    "TMQ-N-YF-8V",    
+    "SJTU-TMQA-N-YF-NAA-4V",
+    "SJTU-TMQA-N-YF-NAA-8V",
+    "SJTU-TMQA-N-YF-NAA-16V",   
+]   
+data_cross_sjtu_tmqa_YFNAA = build_matrix(agg, train_labels_cross_sjtu_tmqa_YFNAA, test_labels_cross_sjtu_tmqa_YFNAA)
+
+print(summary[summary["model"].str.contains("TMQ[-_]SJTU", case=False, na=False)][["model", "train_alias"]]
+      .drop_duplicates().head(50))
+plot_heatmap(
+    data_cross_sjtu_tmqa_YFNAA,
+    train_labels_cross_sjtu_tmqa_YFNAA,
+    test_labels_cross_sjtu_tmqa_YFNAA,
+    title="Cross-base TMQ <-> SJTU-TMQA - NAA - PLCC",
     figsize=(8, 6),
 )
