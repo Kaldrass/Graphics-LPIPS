@@ -46,6 +46,7 @@ if __name__ == "__main__":
     '-db', database,
     '-mos', mos_csv_file,
     '-testlist', test_list_csv,
+    '--use_gpu'
 ]
     cmd2 = [
            'python', 'correlation_VP.py',

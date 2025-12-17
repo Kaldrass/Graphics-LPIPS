@@ -101,9 +101,10 @@ for fold_idx, ref_obj_list in enumerate(ref_obj_list_folds):
     loss_fn = lpips.LPIPS(net='alex',version=opt.version, model_path = model_folds[fold_idx])# e.g. model_path = './checkpoints/Trial1/latest_net_.pth'
     if(opt.use_gpu):
         loss_fn.cuda()
+        print("Using GPU for evaluation.")
     sd = loss_fn.state_dict()
     # print("Fold", fold_idx, "sum weights:", sum(v.abs().sum().item() for v in sd.values()))
-    sd = loss_fn.state_dict()
+    # sd = loss_fn.state_dict()
     print("CKPT loaded keys:", len(sd))
     for k in ["lins.0.model.1.weight","net.slice1.0.weight"]:
         if k in sd: print(k, float(sd[k].abs().sum()))
