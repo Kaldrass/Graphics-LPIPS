@@ -20,7 +20,15 @@ from decimal import Decimal
 import find_dis_ref
 import correlation_VP
 import re
-
+# --- Helpers ---
+def normalize_name(name: str) -> str:
+    name = name.lower()
+    name = re.sub(r'\(.*?\)', '', name)     # remove parentheses content
+    name = re.sub(r'_db$', '', name)
+    name = re.sub(r'_kfolds$', '', name)
+    name = re.sub(r'[^a-z0-9]', '', name)   # keep only alphanumerics
+    return name
+# --- Argument Parser ---
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 parser.add_argument('--use_gpu', action='store_true', default=True, help='turn on flag to use GPU')
@@ -49,7 +57,14 @@ force_overwrite = False # If the file already exists, we will overwrite it. If F
 out = './out/' + database + '/' + render_method + '/' + view_method + '/' + model + '/' + str(testing_views) + 'VP/'
 # ------------------------------- DEBUG VARIABLES -------------------------------
 root_refPatches = 'D:/These/Projets/CompareMetrics/out/' + database + '/' + render_method + '/' + view_method + '/Source/' + str(testing_views) + 'VP/' 
+# test if the root folders exist
+if(not os.path.exists(root_refPatches)):
+    print('The folder %s does not exist. Please check the parameters.' % root_refPatches)
+    exit()
 root_disPatches = 'D:/These/Projets/CompareMetrics/out/' + database + '/' + render_method + '/' + view_method + '/Distorted/' + str(testing_views) + 'VP/'
+if(not os.path.exists(root_disPatches)):
+    print('The folder %s does not exist. Please check the parameters.' % root_disPatches)
+    exit()
 ext = '.png'
 # The 20% is the one that is used in the test_list_csv file.
 # ref_obj_list = find_dis_ref.find_ref_files(root_refPatches)
@@ -62,11 +77,21 @@ if (use_folds):
         # ref_obj_list = correlation_VP.get_testset_ref_list(test_list_csv) # We will take the reference objects from the CSV file. The function 'get_ref_obj_list' will return a list of the reference objects.
         # For folds, we transform 
         # './dataset/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv' into './dataset/folds/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6_k${fold}.csv'
-        if model.startswith(database) or (model.startswith('GraphicsLPIPS') and database=='TMQ'):
-            test_list_csv_fold = './dataset/' + database + '/folds/' + test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
-        
-        else: 
-            test_list_csv_fold = test_list_csv#'./dataset/TSMD/folds/' + test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
+        model_norm = normalize_name(model)
+        db_norm    = normalize_name(database)
+
+        if model_norm.startswith(db_norm) or (model_norm.startswith("graphicslpips") and db_norm == "tmq"):
+            test_list_csv_fold = (
+                './dataset/' + database + '/folds/' +
+                os.path.basename(test_list_csv).replace('.csv', f'_k{fold}.csv')
+            )
+        else:
+            test_list_csv_fold = test_list_csv
+
+        # if model.startswith(database) or (model.startswith('GraphicsLPIPS') and database=='TMQ'):
+        #     test_list_csv_fold = './dataset/' + database + '/folds/' + test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
+        # else: 
+        #     test_list_csv_fold = test_list_csv#'./dataset/TSMD/folds/' + test_list_csv.split('\\')[-1].replace('.csv', '_k' + str(fold) + '.csv')
             
         # test_list_csv_fold = re.sub(r'(_k\d+)?\.csv$', f'_k{fold}.csv', test_list_csv.replace('\\', '/'))            
         print("Using test list CSV file for fold %d: %s" % (fold, test_list_csv_fold))
@@ -129,7 +154,7 @@ for fold_idx, ref_obj_list in enumerate(ref_obj_list_folds):
 
         if not(os.path.exists(output_folds[fold_idx] + '_METRIC_RESULTS_TESTSET_/' + ref_obj + '/')):
             os.makedirs(os.path.dirname(output_folds[fold_idx] + '_METRIC_RESULTS_TESTSET_/' + ref_obj + '/'), exist_ok=True)    
-            print('Creating the folder %s' % (output_folds[fold_idx] + '_METRIC_RESULTS_TESTSET_/' + ref_obj + '/'))
+            # print('Creating the folder %s' % (output_folds[fold_idx] + '_METRIC_RESULTS_TESTSET_/' + ref_obj + '/'))
 
         if(os.path.exists(output_folds[fold_idx] + '_METRIC_RESULTS_TESTSET_/' + ref_obj + '/GLPIPS_results_testset.csv') and force_overwrite == False):
             print('The file %s already exists. We will not overwrite it.' % (output_folds[fold_idx] + '_METRIC_RESULTS_TESTSET_/' + ref_obj + '/GLPIPS_results.csv'))
@@ -154,7 +179,7 @@ for fold_idx, ref_obj_list in enumerate(ref_obj_list_folds):
             # print("find dis ref : ", root_refPatches  + ref_obj)
             csv_patch_file = find_dis_ref.find_ref_csvfiles(root_refPatches + ref_obj)[0]
 
-            ###--------------------DEBUG START--------------------###
+            ##--------------------DEBUG START--------------------###
             # if(correlation_VP.get_MOS(mos_csv_file, distorted_obj, 2, 3) == -1): 
             # # if(correlation_VP.get_test_MOS(test_list_csv, distorted_obj) == -1): # ONLY FOR TMQ 
             #     print('[DEBUG] The object %s is not in the MOS file. We will skip it.' % distorted_obj)

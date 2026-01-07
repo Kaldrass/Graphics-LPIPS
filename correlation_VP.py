@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import math
 import scipy.stats as stats
 from rapidfuzz import fuzz
+import re
 
 
 def is_match_fuzz(name1, name2, threshold=90):
@@ -28,6 +29,13 @@ def normalize_mos(mos_array):
     """Normalize MOS values from [1, 5] where 5 is best quality to [0, 1], where 0 is best quality."""
     return 1 - (mos_array - 1) / (5 - 1)
 
+def normalize_name(name: str) -> str:
+    name = name.lower()
+    name = re.sub(r'\(.*?\)', '', name)     # remove parentheses content
+    name = re.sub(r'_db$', '', name)
+    name = re.sub(r'_kfolds$', '', name)
+    name = re.sub(r'[^a-z0-9]', '', name)   # keep only alphanumerics
+    return name
 
 # SECTION - GETTERS BEGIN
 def get_MOS(MOSfile, distorted_obj_name, name_col, mos_col):
