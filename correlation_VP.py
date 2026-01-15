@@ -57,7 +57,8 @@ def get_MOS(MOSfile, distorted_obj_name, name_col, mos_col):
                     break
                 except ValueError:
                     pass
-
+    if mos == -1:
+        print('[DEBUG] The object %s is not in the MOS file.' % distorted_obj_name)
     return mos
 
 
