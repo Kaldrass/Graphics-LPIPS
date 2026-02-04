@@ -83,6 +83,31 @@ def training_alias_from_model(model):
 
     return f"{db}-{render_short}-{view_short}-{int(nviews)}V"
 
+def _normalize_db_name(db: str) -> str:
+    """
+    Normalize database names to the canonical forms used in aliases/pairs_df.
+    """
+    s = str(db or "").strip().upper()
+
+    # Common formatting
+    s = s.replace("_", "-")
+
+    # BASICS variants
+    if s in {"BASICS(PC)_DB", "BASICS(PC)-DB", "BASICS-PC-DB", "BASICS(PC)"}:
+        return "BASICS"
+
+    # Some aliases may use TMQ-SJTU / SJTU-TMQA etc.
+    if s == "TMQ-SJTU":
+        return "TMQ-SJTU"
+    if s == "SJTU-TMQA":
+        return "SJTU-TMQA"
+    if s == "TSMD":
+        return "TSMD"
+    if s == "TMQ":
+        return "TMQ"
+
+    # Fallback: keep as-is after basic normalization
+    return s
 
 def test_alias_from_row(row):
     db_raw = str(row.get("database", "")).upper()
@@ -145,8 +170,7 @@ def build_matrix(agg, train_labels, test_labels):
 
 
 def plot_heatmap(data, train_labels, test_labels, title, figsize=(6, 5), vmin=None, vmax=None):
-    """Helper to plot a single heatmap."""
-    df = pd.DataFrame(data, index=train_labels, columns=test_labels)
+    df = pd.DataFrame(data, index=train_labels, columns=test_labels )
     sns.set_theme(style="white", font_scale=1.0)
     plt.figure(figsize=figsize)
 
@@ -155,7 +179,6 @@ def plot_heatmap(data, train_labels, test_labels, title, figsize=(6, 5), vmin=No
         vmin = np.nanmin(df.values)
     if vmax is None:
         vmax = np.nanmax(df.values)
-
     ax = sns.heatmap(
         df,
         annot=True,
@@ -164,13 +187,13 @@ def plot_heatmap(data, train_labels, test_labels, title, figsize=(6, 5), vmin=No
         vmin=vmin,
         vmax=vmax,
     )
+    
     ax.set_title(title, pad=12)
     ax.set_xlabel("Test")
     ax.set_ylabel("Training")
 
     plt.tight_layout()
     plt.show()
-    # You can replace by plt.savefig(...) if needed
 
 # ============================
 # 10. Intra-BASICS(PC)_DB - PLCC
@@ -440,8 +463,6 @@ test_labels_cross_sjtu_tmqa_YFNAA = [
 
 def plot_two_methods_overlay(pairs_df, *, db: str, render: str, methods: list[str], title: str, diagonal: bool = True):
     plt.figure(figsize=(6, 4))
-    baseline = 0.59
-    plt.axhline(baseline, linestyle="--", linewidth=1.5)
     for view_prefix in methods:
         df = pairs_df[
             (pairs_df["train_db"] == db) &
@@ -455,16 +476,18 @@ def plot_two_methods_overlay(pairs_df, *, db: str, render: str, methods: list[st
 
         curve = df.groupby("train_nviews")["metric"].mean().sort_index()
         plt.plot(curve.index.to_list(), curve.values.tolist(), marker="o", label=view_prefix)
+    baseline = 0.846
+    plt.axhline(baseline, linestyle="--", linewidth=1.5)
     plt.text(
         0.99, baseline,
-        "YUV_PSNR (0.59)",
+        "GRAPHICS-LPIPS Original (0.846)",
         transform=plt.gca().get_yaxis_transform(),  # x en coords axes [0..1], y en data
         ha="right",
         va="bottom"
     )
-    ax= plt.gca()
+    # ax= plt.gca()
     # ax.set_xticks(curve.index.to_list())
-    ax.set_ylim(0.55, 0.70)
+    # ax.set_ylim(0.55, 0.70)
     plt.grid(True, alpha=0.3)
     plt.title(title)
     plt.xlabel("Number of training views")
@@ -545,99 +568,255 @@ plot_two_methods_overlay(
 #     # fixed_test_views=4,
 #     fixed_test_same_method=False,
 # )
-def plot_all_heatmaps():
-    # Intra-BASICS(PC)_DB - PLCC
-    all_train_aliases = agg.index.get_level_values(0).unique()
-    all_test_aliases = agg.index.get_level_values(1).unique()
-    tmq_tests = ["TMQ-N-YF-1V","TMQ-N-YF-4V"]
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
-    basics_train = sorted(a for a in all_train_aliases if a.startswith("BASICS-"))
-    basics_train = tmq_tests + basics_train
-    basics_test = sorted(a for a in all_test_aliases if a.startswith("BASICS-"))
+def diagonal_1d_table(
+    pairs_df: pd.DataFrame,
+    *,
+    db: str,
+    render: str,
+    view_prefixes: list[str] = None,   # ex ["YF","Fib"] ou ["Org"]
+    metric_col: str = "metric",
+    aggfunc: str = "mean",
+) -> pd.DataFrame:
+    """
+    Build a 1D summary table of diagonal values (train_alias == test_alias),
+    grouped by number of views, optionally split by view method (YF/Fib/Org...).
 
-    if basics_train and basics_test:
-        data_basics = build_matrix(agg, basics_train, basics_test)
-        plot_heatmap(
-            data_basics,
-            basics_train,
-            basics_test,
-            title="Intra-BASICS(PC)_DB - PLCC",
-            figsize=(max(4, 0.8 * len(basics_test)), max(4, 0.8 * len(basics_train))),
-        )
+    Robust to BASICS naming variants (BASICS(PC)_DB -> BASICS).
+    """
+    df = pairs_df.copy()
+
+    # Normalize incoming filters
+    db_norm = _normalize_db_name(db)
+    render_norm = str(render or "").strip().upper()
+
+    # Normalize DB columns inside df (safe even if already normalized)
+    df["train_db_norm"] = df["train_db"].apply(_normalize_db_name)
+    df["test_db_norm"] = df["test_db"].apply(_normalize_db_name)
+
+    # Keep only diagonal
+    df = df[df["train_alias"] == df["test_alias"]]
+
+    # Filter dataset/render on the train side (train == test on diagonal anyway)
+    df = df[(df["train_db_norm"] == db_norm) & (df["train_render"] == render_norm)]
+
+    if df.empty:
+        return pd.DataFrame()
+
+    # If no list provided, infer all distinct train_view values
+    if view_prefixes is None:
+        df["view_key"] = df["train_view"].fillna("")
     else:
-        print("No BASICS(PC)_DB entries found (no train/test alias starting with 'BASICS-').")
+        def _match_prefix(v: str) -> str | None:
+            v = (v or "")
+            for p in view_prefixes:
+                if v.startswith(p):
+                    return p
+            return None
 
-    # data_tmq_Org = build_matrix(agg, train_labels_tmq_Org, test_labels_tmq_Org)
-    # plot_heatmap(
-    #     data_tmq_Org,
-    #     train_labels_tmq_Org,
-    #     test_labels_tmq_Org,
-    #     title="Intra-TMQ - Orginal viewpoints - PLCC",
-    #     figsize=(6, 5),
-    # )
-   
-    # data_tmq_yf = build_matrix(agg, train_labels_tmq_yf, test_labels_tmq_yf)
-    # plot_heatmap(
-    #     data_tmq_yf,
-    #     train_labels_tmq_yf,
-    #     test_labels_tmq_yf,
-    #     title="Intra-TMQ - Y_fixed_0.3 - PLCC",
-    #     figsize=(5, 4),
-    # )
-    # data_tmq_fib = build_matrix(agg, train_labels_tmq_fib, test_labels_tmq_fib)
-    # plot_heatmap(
-    #     data_tmq_fib,
-    #     train_labels_tmq_fib,
-    #     test_labels_tmq_fib,
-    #     title="Intra-TMQ - Fibonacci - PLCC",
-    #     figsize=(5, 4),
-    # )
-    # data_tsmd_yf = build_matrix(agg, train_labels_tsmd_yf, test_labels_tsmd_yf)
-    # plot_heatmap(
-    #     data_tsmd_yf,
-    #     train_labels_tsmd_yf,
-    #     test_labels_tsmd_yf,
-    #     title="Intra-TSMD - Y_fixed_0.3 - PLCC",
-    #     figsize=(5, 4),
-    # )
-    # data_cross_yf = build_matrix(agg, train_labels_cross_yf, test_labels_cross_yf)
-    # plot_heatmap(
-    #     data_cross_yf,
-    #     train_labels_cross_yf,
-    #     test_labels_cross_yf,
-    #     title="Cross-base - New Render - Y_fixed_0.3 - PLCC",
-    #     figsize=(7, 5),
-    # )
-    # data_cross_fib = build_matrix(agg, train_labels_cross_fib, test_labels_cross_fib)
-    # plot_heatmap(
-    #     data_cross_fib,
-    #     train_labels_cross_fib,
-    #     test_labels_cross_fib,
-    #     title="Cross-base - New Render - Fibonacci - PLCC",
-    #     figsize=(6, 5),
-    # )
-    # data_sjtu_tmqa = build_matrix(agg, train_labels_sjtu_tmqa, test_labels_sjtu_tmqa)
-    # plot_heatmap(
-    #     data_sjtu_tmqa,
-    #     train_labels_sjtu_tmqa,
-    #     test_labels_sjtu_tmqa,
-    #     title="Intra-SJTU-TMQA - PLCC",
-    #     figsize=(7, 5),
-    # )
-    # data_cross_sjtu_tmqa = build_matrix(agg, train_labels_cross_sjtu_tmqa, test_labels_cross_sjtu_tmqa)
-    # plot_heatmap(
-    #     data_cross_sjtu_tmqa,
-    #     train_labels_cross_sjtu_tmqa,
-    #     test_labels_cross_sjtu_tmqa,
-    #     title="Cross-base TMQ <-> SJTU-TMQA - PLCC",
-    #     figsize=(8, 6),
-    # )
-    # data_cross_sjtu_tmqa_YFNAA = build_matrix(agg, train_labels_cross_sjtu_tmqa_YFNAA, test_labels_cross_sjtu_tmqa_YFNAA)
-    # plot_heatmap(
-    #     data_cross_sjtu_tmqa_YFNAA,
-    #     train_labels_cross_sjtu_tmqa_YFNAA,
-    #     test_labels_cross_sjtu_tmqa_YFNAA,
-    #     title="Cross-base TMQ <-> SJTU-TMQA - NAA - PLCC",
-    #     figsize=(8, 6),
-    # )
-plot_all_heatmaps()
+        df["view_key"] = df["train_view"].apply(_match_prefix)
+        df = df.dropna(subset=["view_key"])
+
+    if df.empty:
+        return pd.DataFrame()
+
+    grouped = df.groupby(["train_nviews", "view_key"])[metric_col]
+    if aggfunc == "mean":
+        grouped = grouped.mean()
+    elif aggfunc == "median":
+        grouped = grouped.median()
+    else:
+        raise ValueError("aggfunc must be 'mean' or 'median'")
+
+    table = grouped.reset_index().pivot(index="train_nviews", columns="view_key", values=metric_col)
+    table.index.name = "nviews"
+    table = table.sort_index()
+
+    return table
+
+
+def show_1d_table_as_matplotlib(table: pd.DataFrame, *, title: str):
+    """
+    Render a small 1D table using matplotlib (not a heatmap).
+    """
+    if table.empty:
+        print("[table] No data.")
+        return
+
+    fig, ax = plt.subplots(figsize=(max(4, 1.2 + 0.7 * table.shape[1]), max(2.0, 0.5 + 0.35 * len(table))))
+    ax.axis("off")
+
+    # Format values
+    display = table.copy()
+    display = display.map(lambda x: "" if pd.isna(x) else f"{x:.3f}")
+
+    mpl_table = ax.table(
+        cellText=display.values,
+        rowLabels=[str(i) for i in display.index],
+        colLabels=[str(c) for c in display.columns],
+        loc="center",
+        cellLoc="center",
+        rowLoc="center",
+    )
+    mpl_table.auto_set_font_size(False)
+    mpl_table.set_fontsize(10)
+    mpl_table.scale(1.0, 1.2)
+
+    ax.set_title(title, pad=10)
+    plt.tight_layout()
+    plt.show()
+
+
+
+
+def plot_all_heatmaps(diagonal_line=False, print=False):
+    # Intra-BASICS(PC)_DB - PLCC
+    if print:
+        all_train_aliases = agg.index.get_level_values(0).unique()
+        all_test_aliases = agg.index.get_level_values(1).unique()
+        tmq_tests = ["TMQ-N-YF-1V","TMQ-N-YF-4V"]
+
+        basics_train = sorted(a for a in all_train_aliases if a.startswith("BASICS-"))
+        basics_train = tmq_tests + basics_train
+        basics_test = sorted(a for a in all_test_aliases if a.startswith("BASICS-"))
+
+        if basics_train and basics_test:
+            data_basics = build_matrix(agg, basics_train, basics_test)
+            plot_heatmap(
+                data_basics,
+                basics_train,
+                basics_test,
+    
+                title="Intra-BASICS(PC)_DB - PLCC",
+                figsize=(max(4, 0.8 * len(basics_test)), max(4, 0.8 * len(basics_train))),
+            )
+        else:
+            print("No BASICS(PC)_DB entries found (no train/test alias starting with 'BASICS-').")
+
+        data_tmq_Org = build_matrix(agg, train_labels_tmq_Org, test_labels_tmq_Org)
+        plot_heatmap(
+            data_tmq_Org,
+            train_labels_tmq_Org,
+            test_labels_tmq_Org,
+            title="Intra-TMQ - Orginal viewpoints - PLCC",
+            figsize=(6, 5),
+
+        )
+        data_tmq_yf = build_matrix(agg, train_labels_tmq_yf, test_labels_tmq_yf)
+        plot_heatmap(
+            data_tmq_yf,
+            train_labels_tmq_yf,
+            test_labels_tmq_yf,
+            title="Intra-TMQ - Y_fixed_0.3 - PLCC",
+            figsize=(5, 4),
+
+        )
+        data_tmq_fib = build_matrix(agg, train_labels_tmq_fib, test_labels_tmq_fib)
+        plot_heatmap(
+            data_tmq_fib,
+            train_labels_tmq_fib,
+            test_labels_tmq_fib,
+            title="Intra-TMQ - Fibonacci - PLCC",
+            figsize=(5, 4),
+
+        )
+        data_tsmd_yf = build_matrix(agg, train_labels_tsmd_yf, test_labels_tsmd_yf)
+        plot_heatmap(
+            data_tsmd_yf,
+            train_labels_tsmd_yf,
+            test_labels_tsmd_yf,
+            title="Intra-TSMD - Y_fixed_0.3 - PLCC",
+            figsize=(5, 4),
+
+        )
+        data_cross_yf = build_matrix(agg, train_labels_cross_yf, test_labels_cross_yf)
+        plot_heatmap(
+            data_cross_yf,
+            train_labels_cross_yf,
+            test_labels_cross_yf,
+            title="Cross-base - New Render - Y_fixed_0.3 - PLCC",
+            figsize=(7, 5),
+
+        )
+        data_cross_fib = build_matrix(agg, train_labels_cross_fib, test_labels_cross_fib)
+        plot_heatmap(
+            data_cross_fib,
+            train_labels_cross_fib,
+            test_labels_cross_fib,
+            title="Cross-base - New Render - Fibonacci - PLCC",
+            figsize=(6, 5),
+
+        )
+        data_sjtu_tmqa = build_matrix(agg, train_labels_sjtu_tmqa, test_labels_sjtu_tmqa)
+        plot_heatmap(
+            data_sjtu_tmqa,
+            train_labels_sjtu_tmqa,
+            test_labels_sjtu_tmqa,
+            title="Intra-SJTU-TMQA - PLCC",
+            figsize=(7, 5),
+
+        )
+        data_cross_sjtu_tmqa = build_matrix(agg, train_labels_cross_sjtu_tmqa, test_labels_cross_sjtu_tmqa)
+        plot_heatmap(
+            data_cross_sjtu_tmqa,
+            train_labels_cross_sjtu_tmqa,
+            test_labels_cross_sjtu_tmqa,
+            title="Cross-base TMQ <-> SJTU-TMQA - PLCC",
+            figsize=(8, 6),
+
+        )
+        data_cross_sjtu_tmqa_YFNAA = build_matrix(agg, train_labels_cross_sjtu_tmqa_YFNAA, test_labels_cross_sjtu_tmqa_YFNAA)
+        plot_heatmap(
+            data_cross_sjtu_tmqa_YFNAA,
+            train_labels_cross_sjtu_tmqa_YFNAA,
+            test_labels_cross_sjtu_tmqa_YFNAA,
+            title="Cross-base TMQ <-> SJTU-TMQA - NAA - PLCC",
+            figsize=(8, 6),
+
+        )
+        # Example usage:
+# 1) TMQ, New render, show diagonal for YF and Fib, grouped by nviews
+table_tmq = diagonal_1d_table(
+    pairs_df,
+    db="TMQ",
+    render="N",
+    view_prefixes=["YF", "Fib"],
+)
+
+# print(table_tmq)  # "mini tableau 1D" directement dans la console
+show_1d_table_as_matplotlib(table_tmq, title="TMQ (N) - Diagonal PLCC by #views")
+
+# 2) TSMD
+table_tsmd = diagonal_1d_table(
+    pairs_df,
+    db="TSMD",
+    render="N",
+    view_prefixes=["YF", "Fib"],
+)
+# print(table_tsmd)
+show_1d_table_as_matplotlib(table_tsmd, title="TSMD (N) - Diagonal PLCC by #views")
+
+# 3) BASICS
+table_basics = diagonal_1d_table(
+    pairs_df,
+    db="BASICS(PC)_DB",
+    render="SP",
+    view_prefixes=["YF", "Fib"],
+)
+show_1d_table_as_matplotlib(table_basics, title="BASICS (SP) - Diagonal PLCC by #views")
+
+# 4) SJTU-TMQA
+table_sjtu_tmqa = diagonal_1d_table(
+    pairs_df,
+    db="SJTU-TMQA",
+    render="N",
+    view_prefixes=["YF", "Fib"],
+)
+# print(table_sjtu_tmqa)
+show_1d_table_as_matplotlib(table_sjtu_tmqa, title="SJTU-TMQA (N) - Diagonal PLCC by #views")
+
+
+# plot_all_heatmaps()

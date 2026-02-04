@@ -225,7 +225,6 @@ for fold_idx, ref_obj_list in enumerate(ref_obj_list_folds):
                                     np.clip(dists_np, 0.0, 1.0, out=dists_np)
                                 GraphicsLPIPS = float(dists_np.mean())
                                 List_GraphicsLPIPS.append(GraphicsLPIPS)
-
                             # Nouveau point de vue
                             v += 1
                             refimg = cv2.imread(f"{ref_views_folder}/view_{v}{ext}")[:, :, ::-1]
