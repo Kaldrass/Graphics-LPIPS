@@ -114,9 +114,12 @@ rem ========================
 @REM python config.py -m TMQ_SJTUtest_NR_4VP_yf03_kfolds -v 4 -vm Y_fixed_0.3 -rm New_Render -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_normalized.csv"
 @REM python config.py -m TMQ_NR_4VP_yf03_kfolds -use_folds True -v 4 -vm Y_fixed_0.3 -rm New_Render -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_normalized.csv"
 @REM @REM python config.py -m TSMD_NR_8VP_yf03_kfolds -use_folds True -v 8 -vm Y_fixed_0.3 -rm New_Render -db "TSMD" -mos "D:\These\BDD\TexturedMeshes\TSMD\MOS\TSMD_MOS.csv" -testlist "D:\These\Graphics-LPIPS\dataset\TSMD\TSMD_20%%_TestList_scaled.csv"
-
-python config.py -m SJTU-TMQA_NR_8VP_yf03_kfolds -v 8 -vm Y_fixed_0.3 -rm New_Render -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\folds\SJTU-TMQA_MOS_test20.csv" --use_folds
-python config.py -m SJTU-TMQA_NR_16VP_yf03_kfolds -v 16 -vm Y_fixed_0.3 -rm New_Render -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\folds\SJTU-TMQA_MOS_test20.csv" --use_folds
+@REM python config.py -m TMQ_NR_1VP_org_kfolds -v 4 -vm Y_fixed_0 -rm New_Render -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_normalized.csv" --use_folds
+python config.py -m GraphicsLPIPS_FinalNetwork_kfolds -v 1 -vm Y_fixed_0 -rm 0_0_light -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_normalized.csv" --use_folds
+python config.py -m GraphicsLPIPS_FinalNetwork_kfolds -v 4 -vm Y_fixed_0 -rm 0_0_light -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_normalized.csv" --use_folds
+python config.py -m GraphicsLPIPS_FinalNetwork_kfolds -v 8 -vm Y_fixed_0 -rm 0_0_light -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_normalized.csv" --use_folds
+@REM python config.py -m SJTU-TMQA_NR_8VP_yf03_kfolds -v 8 -vm Y_fixed_0.3 -rm New_Render -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\folds\SJTU-TMQA_MOS_test20.csv" --use_folds
+@REM python config.py -m SJTU-TMQA_NR_16VP_yf03_kfolds -v 16 -vm Y_fixed_0.3 -rm New_Render -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\folds\SJTU-TMQA_MOS_test20.csv" --use_folds
 
 @REM echo TSMD_NR_8VP_yf03_kfolds done
 rem ========================

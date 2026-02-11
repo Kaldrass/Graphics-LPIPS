@@ -11,8 +11,10 @@ import matplotlib.pyplot as plt
 import math
 import scipy.stats as stats
 from rapidfuzz import fuzz
+from scipy.optimize import curve_fit
 import re
 
+from itertools import cycle
 
 def is_match_fuzz(name1, name2, threshold=90):
     """Verify if two names are similar."""
@@ -25,10 +27,12 @@ def normalize_name(name):
     return name.lower().replace("_", "").strip()
 
 
-def normalize_mos(mos_array):
-    """Normalize MOS values from [1, 5] where 5 is best quality to [0, 1], where 0 is best quality."""
-    return 1 - (mos_array - 1) / (5 - 1)
-
+def normalize_mos(mos_array, method="auto"):
+    """Normalize MOS values from [min, max] where max is best quality to [0, 1], where 0 is best quality."""
+    if method == "autoInvert":
+        return 1 - (mos_array - mos_array.min()) / (mos_array.max() - mos_array.min())
+    elif method == "auto":
+        return (mos_array - mos_array.min()) / (mos_array.max() - mos_array.min())
 def normalize_name(name: str) -> str:
     name = name.lower()
     name = re.sub(r'\(.*?\)', '', name)     # remove parentheses content
@@ -36,6 +40,36 @@ def normalize_name(name: str) -> str:
     name = re.sub(r'_kfolds$', '', name)
     name = re.sub(r'[^a-z0-9]', '', name)   # keep only alphanumerics
     return name
+
+def logistic_4pl(x, b1, b2, b3, b4):
+    return (b1 - b2) / (1.0 + np.exp(-(x - b3) / (abs(b4) + 1e-12))) + b2
+
+def plot_scatter_iqa(avg_lpips, mos_array, title):
+    popt, _ = curve_fit(
+        logistic_4pl,
+        avg_lpips,
+        mos_array,
+        maxfev=20000
+    )
+
+    xs = np.linspace(avg_lpips.min(), avg_lpips.max(), 400)
+    ys = logistic_4pl(xs, *popt)
+
+    preds = logistic_4pl(avg_lpips, *popt)
+
+    pearson = stats.pearsonr(preds, mos_array)[0]
+    spearman = stats.spearmanr(avg_lpips, mos_array)[0]  # usually on raw scores
+
+    plt.figure(figsize=(8, 6))
+    plt.scatter(avg_lpips, mos_array, s=30, alpha=0.7)
+    plt.plot(xs, ys, color="red", linewidth=2.5)
+
+    plt.title(f"{title}\nPearson={pearson:.3f} | Spearman={spearman:.3f}")
+    plt.xlabel("Graphics-LPIPS")
+    plt.ylabel("MOS (normalized)")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
 
 # SECTION - GETTERS BEGIN
 def get_MOS(MOSfile, distorted_obj_name, name_col, mos_col):
@@ -117,7 +151,125 @@ def get_testset_dis_list_from_ref(test_list_csv, ref_obj_name):
 
 
 # SECTION - GETTERS END
+def plot_scatter_logistic(avg_lpips, mos_array, title="Logistic regression", show = False, base_dir=None, save_plot=False):
+    """
+    Display scatter plot MOS vs LPIPS with logistic regression curve.
+    MOS must already be normalized in [0,1].
+    """
+    
+    # Build GLM (same as correlation code)
+    X = sm.add_constant(avg_lpips)
+    model = sm.GLM(mos_array, X, family=sm.families.Binomial()).fit()
+    predictions = model.predict(X)
+    # plot_scatter_iqa(avg_lpips, mos_array, title)
+    # Correlations after logistic mapping
+    pearson = stats.pearsonr(predictions, mos_array)[0]
+    spearman = stats.spearmanr(predictions, mos_array)[0]
 
+    # Smooth curve for display
+    xs = np.linspace(np.min(avg_lpips), np.max(avg_lpips), 300)
+    Xs = sm.add_constant(xs)
+    ys = model.predict(Xs)
+
+    # Plot
+    plt.figure(figsize=(8, 6))
+    plt.scatter(avg_lpips, mos_array, s=35, alpha=0.8, label="Data")
+    plt.plot(xs, ys, linewidth=2.5, color="red", label="Logistic regression")
+
+
+    plt.title(
+        f"{title}\nPearson={pearson:.3f} | Spearman={spearman:.3f}"
+    )
+    plt.xlabel("Graphics-LPIPS")
+    plt.ylabel("MOS (normalized)")
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    if save_plot and base_dir is not None:
+        plt.savefig(os.path.join(base_dir, f"{title}.png"))
+    if show:
+        plt.show()
+    else:
+        plt.close()
+
+
+def plot_scatter_logistic_multifold(
+    folds_lpips,
+    folds_mos,
+    title,
+    xlabel="Graphics-LPIPS",
+    show=True,
+    save_plot=False,
+    base_dir=None,
+):
+    """
+    Points are colored by fold; only one logistic curve is fitted on ALL_FOLDS.
+    folds_lpips: list[np.ndarray]
+    folds_mos:   list[np.ndarray] (MOS normalized)
+    """
+
+    plt.figure(figsize=(8, 6))
+
+    # --- Scatter per fold (different colors)
+    for fold_idx, (lpips, mos) in enumerate(zip(folds_lpips, folds_mos)):
+        lpips = np.asarray(lpips, dtype=float)
+        mos = np.asarray(mos, dtype=float)
+
+        mask = np.isfinite(lpips) & np.isfinite(mos)
+        lpips = lpips[mask]
+        mos = mos[mask]
+
+        if lpips.size == 0:
+            continue
+
+        plt.scatter(lpips, mos, s=25, alpha=0.5, label=f"Fold {fold_idx}")
+
+    # --- Fit a single 4PL curve on all folds
+    all_lpips = np.concatenate([np.asarray(a, dtype=float) for a in folds_lpips], axis=0)
+    all_mos = np.concatenate([np.asarray(a, dtype=float) for a in folds_mos], axis=0)
+
+    mask = np.isfinite(all_lpips) & np.isfinite(all_mos)
+    all_lpips = all_lpips[mask]
+    all_mos = all_mos[mask]
+
+    p0 = [
+        float(np.max(all_mos)),
+        float(np.min(all_mos)),
+        float(np.median(all_lpips)),
+        float(np.std(all_lpips) if np.std(all_lpips) > 1e-6 else 1.0),
+    ]
+
+    try:
+        popt, _ = curve_fit(logistic_4pl, all_lpips, all_mos, p0=p0, maxfev=20000)
+    except Exception as e:
+        print("[plot] 4PL fit failed:", str(e))
+        popt = p0
+
+    xs = np.linspace(float(np.min(all_lpips)), float(np.max(all_lpips)), 500)
+    ys = logistic_4pl(xs, *popt)
+
+    # Correlations (IQA convention: PLCC after mapping, SROCC on raw)
+    mos_hat = logistic_4pl(all_lpips, *popt)
+    pearson = stats.pearsonr(mos_hat, all_mos)[0]
+    spearman = stats.spearmanr(all_lpips, all_mos)[0]
+
+    plt.plot(xs, ys, color="black", linewidth=3, label="ALL_FOLDS fit")
+
+    plt.title(f"{title}\nPearson={pearson:.3f} | Spearman={spearman:.3f}")
+    plt.xlabel(xlabel)
+    plt.ylabel("MOS (normalized)")
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+
+    if save_plot and base_dir is not None:
+        safe_title = re.sub(r'[<>:"/\\|?*]+', '_', title)
+        plt.savefig(os.path.join(base_dir, f"{safe_title}_ALLFOLDS.png"), dpi=200)
+
+    if show:
+        plt.show()
+    else:
+        plt.close()
 
 def calculate_correlation_all_vps_combined(base_dir, batchname, output_csv='global_combined_correlation.csv'):
     correlations = [("Object", "Pearson", "Spearman", "Slope", "CI_slope_lower", "CI_slope_upper", "Intercept", "R2")]
@@ -154,7 +306,7 @@ def calculate_correlation_all_vps_combined(base_dir, batchname, output_csv='glob
         lpips_array = clamp01(np.array(lpips_all_vps))
 
         # MOS: from [1, 5] to [0, 1], where 0 is best quality
-        mos_array = normalize_mos(mos_array)
+        mos_array = normalize_mos(mos_array, method="auto")
 
         # Average LPIPS over all viewpoints
         avg_lpips = np.mean(lpips_array, axis=1)
@@ -179,6 +331,7 @@ def calculate_correlation_all_vps_combined(base_dir, batchname, output_csv='glob
             round(ci[1, 1], 4),
             round(intercept, 4),
         ))
+
 
     # Save per object correlations for this fold
     with open(output_csv, mode='w', newline='') as f:
@@ -210,7 +363,7 @@ def calculate_correlation_all_vps_combined(base_dir, batchname, output_csv='glob
                 all_lpips.append(avg_lpips)
 
     all_mos = np.array(all_mos)
-    all_mos = normalize_mos(all_mos)
+    all_mos = normalize_mos(all_mos, method="auto")
     all_lpips = np.array(all_lpips)
 
     X = sm.add_constant(all_lpips)
@@ -219,10 +372,22 @@ def calculate_correlation_all_vps_combined(base_dir, batchname, output_csv='glob
 
     pearson_corr = stats.pearsonr(predictions, all_mos)[0]
     spearman_corr = stats.spearmanr(predictions, all_mos)[0]
-
+    plot_scatter_logistic(
+        all_lpips,
+        all_mos,
+        title=f"{batchname} - All viewpoints combined",
+        base_dir=base_dir,
+        show=False, # For global plot, we save it but do not show it to avoid too many popups when processing folds
+        save_plot=True
+    )
+    # plot_scatter_iqa(
+    #     all_lpips,
+    #     all_mos,
+    #     title=f"{batchname} - All viewpoints combined (raw scores)"
+    # )
     # Print numeric summary for this fold / configuration
     print(f"Global correlations - Pearson: {pearson_corr:.4f}, Spearman: {spearman_corr:.4f}")
-
+    
     # Previous per-fold stats file is removed to avoid one file per fold
     # global_stats_path = os.path.join(base_dir, "global_stats.csv")
     # with open(global_stats_path, mode='w', newline='') as f:
@@ -230,7 +395,7 @@ def calculate_correlation_all_vps_combined(base_dir, batchname, output_csv='glob
     #     writer.writerow(["Pearson", "Spearman"])
     #     writer.writerow([round(pearson_corr, 4), round(spearman_corr, 4)])
 
-    return pearson_corr, spearman_corr
+    return pearson_corr, spearman_corr, all_lpips, all_mos
 
 
 def main():
@@ -249,6 +414,7 @@ def main():
 
     model = opt.model
     modelpath = './checkpoints/' + model + '/latest_net_.pth'
+    
     use_folds = opt.use_folds
     testing_views = opt.views
     view_method = opt.view_method
@@ -266,11 +432,13 @@ def main():
         model,
         f"{testing_views}VP"
     )
-
+    # print(f"Experiment directory: {experiment_dir}")
     if use_folds:
         pcors = []
         scores_pearson = []
         scores_spearman = []
+        all_lpips_folds = []
+        all_mos_folds = []
 
         for fold_idx in range(5):
             base_dir = os.path.join(
@@ -279,11 +447,35 @@ def main():
                 "_METRIC_RESULTS_TESTSET_"
             )
             fold_batchname = batchname + '_fold' + str(fold_idx)
-            p_corr, s_corr = calculate_correlation_all_vps_combined(base_dir, fold_batchname)
+            print(f"\nProcessing fold {fold_idx} - Directory: {base_dir}")
+            p_corr, s_corr, fold_lpips, fold_mos= calculate_correlation_all_vps_combined(base_dir, fold_batchname)
             pcors.append(p_corr)
             scores_pearson.append(p_corr)
             scores_spearman.append(s_corr)
+            
+            all_lpips_folds.append(fold_lpips)
+            all_mos_folds.append(fold_mos)
+            
+        all_lpips_concat = np.concatenate(all_lpips_folds, axis=0)
+        all_mos_concat = np.concatenate(all_mos_folds, axis=0)
 
+        # plot_scatter_logistic(
+        #     all_lpips_concat,
+        #     all_mos_concat,
+        #     title=f"{batchname} - ALL_FOLDS - All viewpoints combined",
+        #     base_dir=experiment_dir,   
+        #     show=True,                 
+        #     save_plot=True
+        # )
+        plot_scatter_logistic_multifold(
+            all_lpips_folds,
+            all_mos_folds,
+            title=f"{batchname} - ALL_FOLDS overlay",
+            base_dir=experiment_dir,
+            show=False,
+            save_plot=True,
+        )
+        
         pcorr_mean = float(np.mean(scores_pearson))
         scorr_mean = float(np.mean(scores_spearman))
 

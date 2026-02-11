@@ -1,5 +1,6 @@
 import os
 import re
+import csv
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -316,8 +317,7 @@ def plot_corr_vs_train_views(
 
 pairs_df = make_pairs_df(agg)
 
-
-
+    
 # Training configs: Yana baseline + TMQ Old/New with Orginal viewpoint (1 and 4 views)
 train_labels_tmq_Org = [
     "Yana-Original",
@@ -817,6 +817,11 @@ table_sjtu_tmqa = diagonal_1d_table(
 )
 # print(table_sjtu_tmqa)
 show_1d_table_as_matplotlib(table_sjtu_tmqa, title="SJTU-TMQA (N) - Diagonal PLCC by #views")
+# plot_results_log(
+#     root_dir=BASE_RESULTS_DIR + "\\TMQ\\New_Render\\Original",
+#     only_paths_containing=["TMQ_NR_1VP_org_kfolds\\1VP"],
+#     mos_normalize="auto",
+#     title_metric_name="Graphics LPIPS (SJTU-TMQA New Render YF 4V)",
+# )
 
-
-# plot_all_heatmaps()
+plot_all_heatmaps(print=False)

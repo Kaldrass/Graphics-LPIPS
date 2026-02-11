@@ -1,6 +1,6 @@
 # --- Paramètres ---
-$bat   = "D:\These\Graphics-LPIPS\train_multiple.bat"  # <-- ton .bat
-$quiet = 300   # secondes de "silence" avant déclenchement
+$bat   = "D:\These\Graphics-LPIPS\test_multiple.bat"  
+$quiet = 60   
 $poll  = 5    # intervalle de sondage en secondes
 
 function Get-RenderBlender {
