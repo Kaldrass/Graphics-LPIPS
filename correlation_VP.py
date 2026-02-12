@@ -306,7 +306,7 @@ def calculate_correlation_all_vps_combined(base_dir, batchname, output_csv='glob
         lpips_array = clamp01(np.array(lpips_all_vps))
 
         # MOS: from [1, 5] to [0, 1], where 0 is best quality
-        mos_array = normalize_mos(mos_array, method="auto")
+        mos_array = normalize_mos(mos_array, method="autoInvert")
 
         # Average LPIPS over all viewpoints
         avg_lpips = np.mean(lpips_array, axis=1)
@@ -363,7 +363,7 @@ def calculate_correlation_all_vps_combined(base_dir, batchname, output_csv='glob
                 all_lpips.append(avg_lpips)
 
     all_mos = np.array(all_mos)
-    all_mos = normalize_mos(all_mos, method="auto")
+    all_mos = normalize_mos(all_mos, method="autoInvert")
     all_lpips = np.array(all_lpips)
 
     X = sm.add_constant(all_lpips)
