@@ -79,13 +79,14 @@ if (use_folds):
         # './dataset/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6.csv' into './dataset/folds/TexturedDB_20%_TestList_withnbPatchesPerVP_threth0.6_k${fold}.csv'
         model_norm = normalize_name(model)
         db_norm    = normalize_name(database)
-
+        # print (db_norm, model_norm)
         if model_norm.startswith(db_norm) or (model_norm.startswith("graphicslpips") and db_norm == "tmq"):
             test_list_csv_fold = (
                 './dataset/' + database + '/folds/' +
                 os.path.basename(test_list_csv).replace('.csv', f'_k{fold}.csv')
             )
         else:
+            print("Warning: The model name does not match the database name. We will use the same test list CSV file for all folds.")
             test_list_csv_fold = test_list_csv
 
         # if model.startswith(database) or (model.startswith('GraphicsLPIPS') and database=='TMQ'):

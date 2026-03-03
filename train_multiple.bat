@@ -33,14 +33,25 @@ rem ========================
 @REM python train.py --name TMQ_NR_8VP_yf03_NAA_kfolds --use_folds --src_root "D:\These\Projets\CompareMetrics\out\TMQ\New_Render\Y_fixed_0.3_NAA" --root_refPatches "Source\8VP" --root_distPatches "Distorted\8VP" --datasets "./dataset/TMQ/folds/TexturedDB_80%%_TrainList_withnbPatchesPerVP_threth0.6.csv" --testcsv "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --target "judges"
 
 
-python config.py -m TMQ_NR_1VP_fib_NAA_kfolds -v 1 -vm Fibonacci_NAA -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --use_folds
-python config.py -m TMQ_NR_4VP_fib_NAA_kfolds -v 4 -vm Fibonacci_NAA -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --use_folds
-python config.py -m TMQ_NR_8VP_fib_NAA_kfolds -v 8 -vm Fibonacci_NAA -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --use_folds
+@REM python config.py -m TMQ_NR_1VP_fib_NAA_kfolds -v 1 -vm Fibonacci_NAA -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --use_folds
+@REM python config.py -m TMQ_NR_4VP_fib_NAA_kfolds -v 4 -vm Fibonacci_NAA -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --use_folds
+@REM python config.py -m TMQ_NR_8VP_fib_NAA_kfolds -v 8 -vm Fibonacci_NAA -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --use_folds
 
-python config.py -m TMQ_NR_1VP_yf03_NAA_kfolds -v 1 -vm Y_fixed_0.3_NAA -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --use_folds
-python config.py -m TMQ_NR_4VP_yf03_NAA_kfolds -v 4 -vm Y_fixed_0.3_NAA -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --use_folds
-python config.py -m TMQ_NR_8VP_yf03_NAA_kfolds -v 8 -vm Y_fixed_0.3_NAA -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --use_folds
+@REM python config.py -m TMQ_NR_1VP_yf03_NAA_kfolds -v 1 -vm Y_fixed_0.3_NAA -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --use_folds
+@REM python config.py -m TMQ_NR_4VP_yf03_NAA_kfolds -v 4 -vm Y_fixed_0.3_NAA -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --use_folds
+@REM python config.py -m TMQ_NR_8VP_yf03_NAA_kfolds -v 8 -vm Y_fixed_0.3_NAA -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --use_folds
 
+@REM python train.py --name TMQ_NR_16VP_yf03_kfolds --use_folds --src_root "D:\These\Projets\CompareMetrics\out\TMQ\New_Render\Y_fixed_0.3" --root_refPatches "Source\16VP" --root_distPatches "Distorted\16VP" --datasets "./dataset/TMQ/folds/TexturedDB_80%%_TrainList_withnbPatchesPerVP_threth0.6.csv" --testcsv "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --target "judges"
+@REM python config.py -m TMQ_NR_16VP_yf03_kfolds -v 16 -vm Y_fixed_0.3 -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --use_folds
+
+
+@REM python train.py --name TMQ_NR_1VP_HD_NAA_yf03_kfolds --nThreads 8 --use_folds --src_root "D:\These\Projets\CompareMetrics\out\TMQ\New_Render\Y_fixed_0.3_HD_NAA" --root_refPatches "Source\1VP" --root_distPatches "Distorted\1VP" --datasets "./dataset/TMQ/folds/TexturedDB_80%%_TrainList_withnbPatchesPerVP_threth0.6.csv" --testcsv "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --target "judges"
+@REM python config.py -m TMQ_NR_1VP_HD_NAA_yf03_kfolds -v 1 -vm Y_fixed_0.3_HD_NAA -rm New_Render -db "TMQ" -mos "D:\These\BDD\TexturedMeshes\TMQ\Collected_Data\MOS+CI_3000stimuli.csv" -testlist "./dataset/TMQ/folds/TexturedDB_20%%_TestList_withnbPatchesPerVP_threth0.6.csv" --use_folds
+
+@REM python train.py --name BASICS_SP_8VP_yf00_kfolds --use_folds --src_root "D:\These\Projets\CompareMetrics\out\BASICS\SP\Y_fixed_0" --root_refPatches "Source\8VP" --root_distPatches "Distorted\8VP" --datasets "./dataset/BASICS/folds/MOS_CI_train80.csv" --testcsv "./dataset/BASICS/folds/MOS_CI_test20.csv" --target "mos"
+@REM python config.py -m BASICS_SP_8VP_yf00_kfolds -v 8 -vm Y_fixed_0 -rm SP -db "BASICS" -mos ".\dataset\BASICS\MOS_CI.csv" -testlist ".\dataset\BASICS\folds\MOS_CI_test20.csv" --use_folds
+@REM python config.py -m TMQ_NR_8VP_yf03_kfolds -v 8 -vm Y_fixed_0 -rm SP -db "BASICS" -mos ".\dataset\BASICS\MOS_CI.csv" -testlist ".\dataset\BASICS\MOS_CI_01.csv" --use_folds
+python config.py -m TMQ_NR_8VP_yf03_kfolds -v 8 -vm Y_fixed_0 -rm 0_0_light -db "SJTU-TMQA" -mos ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_1-5.csv" -testlist ".\dataset\SJTU-TMQA\SJTU-TMQA_MOS_normalized.csv" --use_folds
 
 rem ========================    
 

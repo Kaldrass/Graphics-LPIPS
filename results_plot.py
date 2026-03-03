@@ -530,7 +530,7 @@ plot_two_methods_overlay(
     db="TMQ",
     render="N",
     methods=["YF", "Fib"],
-    title=f"TMQ (New render) - {METRIC_COL} vs number of views",
+    title=f"TMQ - {METRIC_COL} vs number of views",
     diagonal=True,
 )
 plot_two_methods_overlay(
@@ -538,7 +538,7 @@ plot_two_methods_overlay(
     db="TSMD",
     render="N",
     methods=["YF", "Fib"],
-    title=f"TSMD (New render) - {METRIC_COL} vs number of views",
+    title=f"TSMD - {METRIC_COL} vs number of views",
     diagonal=True,
 )
 plot_two_methods_overlay(

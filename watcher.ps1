@@ -8,10 +8,16 @@ function Get-RenderBlender {
         Where-Object { $_.CommandLine -match 'render_single\.py' }
 }
 
+function Get-TrainPython {
+    Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+        Where-Object { $_.CommandLine -match 'train\.py' }
+}
+
 $accum = 0
-Write-Host "Watch started: waiting for render_single.py Blender jobs to finish..."
+Write-Host "Watch started: waiting for train.py jobs to finish..."
+
 while ($true) {
-    $procs = Get-RenderBlender
+    $procs = Get-TrainPython
     if ($procs) {
         $accum = 0
         Start-Sleep -Seconds $poll
